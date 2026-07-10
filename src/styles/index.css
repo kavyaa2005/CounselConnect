@@ -1,0 +1,9 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+
+/* App-wide background — prevents white gaps below the layout */
+html, body, #root {
+  min-height: 100%;
+  background-color: #FAF8F4;
+}

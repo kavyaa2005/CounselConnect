@@ -1,0 +1,62 @@
+[
+  {
+    "id": "f1",
+    "counselorId": "c1",
+    "userId": "cbc9dcf0-1e9b-42c9-ae64-6602d4721c22",
+    "patientName": "Asra",
+    "rating": 5,
+    "comment": "The sessions have genuinely helped me manage my anxiety. Thank you!",
+    "date": "2026-07-02",
+    "createdAt": "2026-07-02T10:00:00.000Z"
+  },
+  {
+    "id": "f2",
+    "counselorId": "c1",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "patientName": "Farhan",
+    "rating": 5,
+    "comment": "Very attentive and kind. I always feel heard during our sessions.",
+    "date": "2026-07-03",
+    "createdAt": "2026-07-03T10:00:00.000Z"
+  },
+  {
+    "id": "f3",
+    "counselorId": "c2",
+    "userId": "cbc9dcf0-1e9b-42c9-ae64-6602d4721c22",
+    "patientName": "Asra",
+    "rating": 4,
+    "comment": "Practical techniques that I can actually use day to day.",
+    "date": "2026-07-04",
+    "createdAt": "2026-07-04T10:00:00.000Z"
+  },
+  {
+    "id": "f4",
+    "counselorId": "c2",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "patientName": "Farhan",
+    "rating": 5,
+    "comment": "I appreciate the structured approach \u2014 it keeps me on track.",
+    "date": "2026-07-01",
+    "createdAt": "2026-07-01T10:00:00.000Z"
+  },
+  {
+    "id": "f5",
+    "counselorId": "c7",
+    "userId": "cbc9dcf0-1e9b-42c9-ae64-6602d4721c22",
+    "patientName": "Asra",
+    "rating": 5,
+    "comment": "Helped me build healthier routines. Highly recommend.",
+    "date": "2026-07-02",
+    "createdAt": "2026-07-02T10:00:00.000Z"
+  },
+  {
+    "id": "f6",
+    "counselorId": "c7",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "patientName": "Farhan",
+    "rating": 4,
+    "comment": "Every session leaves me feeling lighter and more hopeful.",
+    "date": "2026-07-03",
+    "createdAt": "2026-07-03T10:00:00.000Z"
+  }
+]

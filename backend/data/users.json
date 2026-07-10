@@ -1,0 +1,66 @@
+[
+  {
+    "id": "cbc9dcf0-1e9b-42c9-ae64-6602d4721c22",
+    "firstName": "Asra",
+    "lastName": "",
+    "email": "asra@gmail.com",
+    "passwordHash": "$2a$12$hDiFe5hqKz5cumpvNxBH.umfHowaLv0VX.r5PUPTmU6cYkfJefNny",
+    "phone": "",
+    "bio": "",
+    "avatar": "",
+    "reason": "Sadness or Low Mood",
+    "sessionType": "A Mix of Both",
+    "frequency": "",
+    "goals": [
+      "Reduce stress",
+      "Self-esteem",
+      "Work-life balance"
+    ],
+    "notifications": {
+      "sessions": true,
+      "moodReminders": true,
+      "messages": true,
+      "aiInsights": false,
+      "newsletter": false
+    },
+    "privacy": {
+      "shareProgress": false,
+      "anonymousData": true,
+      "profileVisible": true
+    },
+    "createdAt": "2026-06-29T11:04:29.002Z",
+    "updatedAt": "2026-06-29T11:04:29.002Z"
+  },
+  {
+    "id": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "firstName": "Farhan",
+    "lastName": "",
+    "email": "fsargath@gmail.com",
+    "passwordHash": "$2a$12$QP1jlQtQGgb9M/vBgkFXIuBCDJM36d2pw28dJ.nTDBQPsH04fMeFy",
+    "phone": "",
+    "bio": "",
+    "avatar": "/uploads/avatar-2bdb4856-efc3-4611-a968-150841df0f42-1783229464204.png",
+    "reason": "Anxiety & Overwhelm",
+    "sessionType": "A Mix of Both",
+    "frequency": "",
+    "goals": [
+      "Manage anxiety",
+      "Find purpose",
+      "Career transitions"
+    ],
+    "notifications": {
+      "sessions": true,
+      "moodReminders": true,
+      "messages": true,
+      "aiInsights": false,
+      "newsletter": false
+    },
+    "privacy": {
+      "shareProgress": false,
+      "anonymousData": true,
+      "profileVisible": true
+    },
+    "createdAt": "2026-06-29T11:06:56.170Z",
+    "updatedAt": "2026-07-05T05:31:04.213Z"
+  }
+]

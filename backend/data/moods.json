@@ -1,0 +1,52 @@
+[
+  {
+    "id": "3235f9f4-f563-40eb-b90e-2a9941b92a78",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "value": 4,
+    "label": "Good",
+    "emoji": "🙂",
+    "notes": "",
+    "date": "2026-06-29",
+    "createdAt": "2026-06-29T11:07:12.771Z"
+  },
+  {
+    "id": "24e1970d-f2b8-4805-8081-cdb0176f07d0",
+    "userId": "cbc9dcf0-1e9b-42c9-ae64-6602d4721c22",
+    "value": 4,
+    "label": "Good",
+    "emoji": "🙂",
+    "notes": "",
+    "date": "2026-06-30",
+    "createdAt": "2026-06-30T03:49:27.273Z"
+  },
+  {
+    "id": "750faddb-db1d-4d41-bd87-23a6033a6b2d",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "value": 4,
+    "label": "Good",
+    "emoji": "🙂",
+    "notes": "",
+    "date": "2026-06-30",
+    "createdAt": "2026-06-30T05:05:34.498Z"
+  },
+  {
+    "id": "f98ab89f-08d5-49bf-89d9-423cf4ead8f8",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "value": 3,
+    "label": "Okay",
+    "emoji": "😐",
+    "notes": "",
+    "date": "2026-07-08",
+    "createdAt": "2026-07-08T14:24:30.793Z"
+  },
+  {
+    "id": "187d5b6d-e3b8-4356-b0f6-454b1cf0602e",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "value": 2,
+    "label": "Low",
+    "emoji": "😔",
+    "notes": "",
+    "date": "2026-07-10",
+    "createdAt": "2026-07-10T13:00:20.272Z"
+  }
+]

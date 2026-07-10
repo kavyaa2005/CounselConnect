@@ -1,0 +1,56 @@
+[
+  {
+    "id": "doc1",
+    "counselorId": "c1",
+    "name": "Intake Assessment Form",
+    "type": "form",
+    "size": "154 KB",
+    "patientId": null,
+    "uploadedAt": "2026-07-02T09:00:00.000Z"
+  },
+  {
+    "id": "doc2",
+    "counselorId": "c1",
+    "name": "CBT Worksheet \u2014 Thought Records",
+    "type": "worksheet",
+    "size": "188 KB",
+    "patientId": null,
+    "uploadedAt": "2026-07-03T09:00:00.000Z"
+  },
+  {
+    "id": "doc3",
+    "counselorId": "c7",
+    "name": "Intake Assessment Form",
+    "type": "form",
+    "size": "222 KB",
+    "patientId": null,
+    "uploadedAt": "2026-07-04T09:00:00.000Z"
+  },
+  {
+    "id": "doc4",
+    "counselorId": "c7",
+    "name": "CBT Worksheet \u2014 Thought Records",
+    "type": "worksheet",
+    "size": "256 KB",
+    "patientId": null,
+    "uploadedAt": "2026-07-01T09:00:00.000Z"
+  },
+  {
+    "id": "doc5",
+    "counselorId": "c7",
+    "name": "Session Consent Agreement",
+    "type": "form",
+    "size": "290 KB",
+    "patientId": null,
+    "uploadedAt": "2026-07-02T09:00:00.000Z"
+  },
+  {
+    "id": "doc6",
+    "counselorId": "c7",
+    "name": "Mindfulness Exercise Pack",
+    "type": "resource",
+    "size": "324 KB",
+    "patientId": null,
+    "uploadedAt": "2026-07-03T09:00:00.000Z"
+  }
+]

@@ -1,0 +1,64 @@
+{
+  "cbc9dcf0-1e9b-42c9-ae64-6602d4721c22": {
+    "c1": [
+      {
+        "id": "760e6279-1d65-4e81-9841-2c257eb284d2",
+        "text": "Hi! I'm your counselor. How can I help you today? 😊",
+        "time": "04:35 PM",
+        "isMe": false,
+        "read": true,
+        "createdAt": "2026-06-29T11:05:49.019Z",
+        "readByDoctor": true
+      }
+    ]
+  },
+  "2bdb4856-efc3-4611-a968-150841df0f42": {
+    "c1": [
+      {
+        "id": "b7b6133a-42fd-4578-9e00-9a7d5ee48157",
+        "text": "Hi! I'm your counselor. How can I help you today? 😊",
+        "time": "04:38 PM",
+        "isMe": false,
+        "read": true,
+        "createdAt": "2026-06-29T11:08:39.761Z",
+        "readByDoctor": true
+      },
+      {
+        "id": "337f959a-08f2-4398-8402-5595812eceff",
+        "text": "Hi! I'm Dr. Sarah Chen. How can I help you today? 😊",
+        "time": "01:37 AM",
+        "isMe": false,
+        "read": true,
+        "readByDoctor": true,
+        "createdAt": "2026-07-04T20:07:41.603Z"
+      },
+      {
+        "id": "994582bd-2a9e-44d7-9c8a-a1bec0cede6d",
+        "text": "Can we reschedule?",
+        "time": "01:37 AM",
+        "isMe": true,
+        "read": true,
+        "readByDoctor": true,
+        "createdAt": "2026-07-04T20:07:47.815Z"
+      },
+      {
+        "id": "4007040b-f75f-4ca5-8b6d-a0709eb9b835",
+        "text": "I have a question",
+        "time": "01:37 AM",
+        "isMe": true,
+        "read": true,
+        "readByDoctor": true,
+        "createdAt": "2026-07-04T20:07:49.009Z"
+      },
+      {
+        "id": "4ba77734-747b-4888-912a-538d016f0c5f",
+        "text": "Thank you!",
+        "time": "01:37 AM",
+        "isMe": true,
+        "read": true,
+        "readByDoctor": true,
+        "createdAt": "2026-07-04T20:07:50.038Z"
+      }
+    ]
+  }
+}

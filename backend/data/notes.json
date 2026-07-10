@@ -1,0 +1,12 @@
+[
+  {
+    "id": "1cc1b638-c278-4257-b529-62d03ffba929",
+    "doctorId": "d1",
+    "patientId": null,
+    "title": "New note",
+    "content": "helllooo \n",
+    "tags": [],
+    "createdAt": "2026-07-04T20:08:25.184Z",
+    "updatedAt": "2026-07-04T20:08:41.187Z"
+  }
+]

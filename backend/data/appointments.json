@@ -1,0 +1,17 @@
+[
+  {
+    "id": "c1136721-8171-4416-b1a3-08fe3079c38d",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "counselorId": "c1",
+    "counselorName": "Dr. Sarah Chen",
+    "counselorAvatar": "https://images.unsplash.com/photo-1573495804664-b1c0849525af?w=300&h=300&fit=crop&crop=face",
+    "sessionType": "video",
+    "date": "July 6, 2026",
+    "time": "9:00 AM",
+    "dateTime": "2026-07-06T03:30:00.000Z",
+    "price": 80,
+    "status": "completed",
+    "createdAt": "2026-07-05T05:46:30.825Z",
+    "updatedAt": "2026-07-05T05:47:17.484Z"
+  }
+]
