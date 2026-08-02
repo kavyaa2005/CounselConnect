@@ -10,6 +10,15 @@ const authenticate = (req, res, next) => {
   const token = authHeader.split(' ')[1];
   try {
     const decoded = verifyToken(token);
+
+    // A two-factor challenge token proves only that the *password* was
+    // correct. It must never open the API — otherwise an attacker with
+    // stolen credentials could skip the second factor entirely by using
+    // the challenge as a bearer token.
+    if (decoded.stage === '2fa') {
+      return error(res, 'Complete two-factor authentication to continue.', 401);
+    }
+
     req.user = decoded;
     req.token = token;
     next();

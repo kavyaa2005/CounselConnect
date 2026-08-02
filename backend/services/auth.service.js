@@ -2,6 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const { hashPassword, comparePassword } = require('../utils/password.utils');
 const { signToken, blacklistToken } = require('../utils/jwt.utils');
 const { readStore, writeStore } = require('../utils/fileStore.utils');
+const totp = require('../utils/totp.utils');
 
 const findUserByEmail = (email) => {
   const users = readStore('users.json');
@@ -76,7 +77,7 @@ const findAdminById = (id) => {
 };
 
 // Unified login: checks users, then doctors, then admins. Token carries the role.
-const loginUser = async (email, password, meta = {}) => {
+const loginUser = async (email, password, meta = {}, code = null) => {
   let account = findUserByEmail(email);
   let role = 'user';
 
@@ -101,8 +102,161 @@ const loginUser = async (email, password, meta = {}) => {
   if (account.status === 'Suspended') {
     throw Object.assign(new Error('This account has been suspended. Please contact support.'), { statusCode: 403 });
   }
+  // ── Two-factor ──
+  // When enrolled, a password alone is not enough. A short-lived challenge
+  // token is returned instead of a session token; it is only good for
+  // completing the second factor and carries no account access on its own.
+  if (account.twoFactor?.enabled) {
+    if (!code) {
+      const challenge = signToken(
+        { id: account.id, role, stage: '2fa' },
+        { expiresIn: '5m' }
+      );
+      return { twoFactorRequired: true, challenge };
+    }
+    if (!consumeSecondFactor(account, role, code)) {
+      recordLogin(account.id, role, { ...meta, status: 'failed-2fa' });
+      throw Object.assign(new Error('That code is not valid. Check your authenticator app and try again.'), { statusCode: 401 });
+    }
+  }
+
   const token = signToken({ id: account.id, email: account.email, role });
   recordLogin(account.id, role, meta);
+  return { token, user: { ...stripSensitive(account), role } };
+};
+
+/* ══════════════ Two-factor authentication ══════════════ */
+
+const storeFor = (role) =>
+  role === 'doctor' ? 'doctors.json' : role === 'admin' ? 'admins.json' : 'users.json';
+
+const readAccount = (id, role) =>
+  readStore(storeFor(role)).find(a => a.id === id);
+
+const writeAccount = (id, role, mutate) => {
+  const file = storeFor(role);
+  const all = readStore(file);
+  const idx = all.findIndex(a => a.id === id);
+  if (idx === -1) throw Object.assign(new Error('Account not found'), { statusCode: 404 });
+  mutate(all[idx]);
+  writeStore(file, all);
+  return all[idx];
+};
+
+/**
+ * Accepts either a TOTP code or an unused recovery code.
+ *
+ * A recovery code is burned on use — that's the point of them.
+ */
+const consumeSecondFactor = (account, role, code) => {
+  const tf = account.twoFactor;
+  if (!tf?.enabled) return false;
+
+  if (totp.verifyToken(tf.secret, code)) return true;
+
+  const hash = totp.hashRecoveryCode(code);
+  const hit = (tf.recoveryCodes || []).find(rc => rc.hash === hash && !rc.usedAt);
+  if (!hit) return false;
+
+  writeAccount(account.id, role, (a) => {
+    const rc = a.twoFactor.recoveryCodes.find(x => x.hash === hash);
+    if (rc) rc.usedAt = new Date().toISOString();
+  });
+  return true;
+};
+
+/**
+ * Step 1 of enrolment: hand back a secret and QR payload.
+ *
+ * Deliberately NOT enabled yet — the user must prove they can generate a
+ * valid code first, otherwise a mis-scanned QR would lock them out.
+ */
+const startTwoFactorSetup = (id, role) => {
+  const account = readAccount(id, role);
+  if (!account) throw Object.assign(new Error('Account not found'), { statusCode: 404 });
+  if (account.twoFactor?.enabled) {
+    throw Object.assign(new Error('Two-factor is already switched on'), { statusCode: 409 });
+  }
+
+  const secret = totp.generateSecret();
+  writeAccount(id, role, (a) => {
+    a.twoFactor = { enabled: false, secret, pending: true, recoveryCodes: [] };
+  });
+
+  return {
+    secret,
+    otpauthUrl: totp.otpauthUrl({ secret, account: account.email }),
+    digits: totp.DIGITS,
+    period: totp.STEP_SECONDS,
+  };
+};
+
+/** Step 2: verify a code from the app, then switch it on and issue recovery codes. */
+const confirmTwoFactorSetup = (id, role, code) => {
+  const account = readAccount(id, role);
+  if (!account?.twoFactor?.secret) {
+    throw Object.assign(new Error('Start the setup again — no pending secret'), { statusCode: 400 });
+  }
+  if (account.twoFactor.enabled) {
+    throw Object.assign(new Error('Two-factor is already switched on'), { statusCode: 409 });
+  }
+  if (!totp.verifyToken(account.twoFactor.secret, code)) {
+    throw Object.assign(new Error("That code didn't match. Make sure your phone's clock is correct and try the current code."), { statusCode: 400 });
+  }
+
+  const plain = totp.generateRecoveryCodes();
+  writeAccount(id, role, (a) => {
+    a.twoFactor.enabled = true;
+    a.twoFactor.pending = false;
+    a.twoFactor.enabledAt = new Date().toISOString();
+    // Only hashes are stored — a leaked store shouldn't yield working codes
+    a.twoFactor.recoveryCodes = plain.map(c => ({ hash: totp.hashRecoveryCode(c), usedAt: null }));
+  });
+
+  // The plaintext codes are shown exactly once, here.
+  return { recoveryCodes: plain };
+};
+
+/** Switching it off requires the password — otherwise a hijacked tab could. */
+const disableTwoFactor = async (id, role, password) => {
+  const account = readAccount(id, role);
+  if (!account) throw Object.assign(new Error('Account not found'), { statusCode: 404 });
+  if (!account.twoFactor?.enabled) {
+    throw Object.assign(new Error('Two-factor is not switched on'), { statusCode: 400 });
+  }
+  const ok = await comparePassword(password || '', account.passwordHash);
+  if (!ok) throw Object.assign(new Error('That password is not correct'), { statusCode: 401 });
+
+  writeAccount(id, role, (a) => { a.twoFactor = { enabled: false }; });
+  return { enabled: false };
+};
+
+const getTwoFactorStatus = (id, role) => {
+  const account = readAccount(id, role);
+  const tf = account?.twoFactor;
+  return {
+    enabled: !!tf?.enabled,
+    enabledAt: tf?.enabledAt || null,
+    recoveryCodesLeft: (tf?.recoveryCodes || []).filter(rc => !rc.usedAt).length,
+  };
+};
+
+/** Completes a login that stopped at the 2FA challenge. */
+const completeTwoFactorLogin = (challengePayload, code, meta = {}) => {
+  if (challengePayload?.stage !== '2fa') {
+    throw Object.assign(new Error('That sign-in attempt is no longer valid'), { statusCode: 401 });
+  }
+  const { id, role } = challengePayload;
+  const account = readAccount(id, role);
+  if (!account) throw Object.assign(new Error('Account not found'), { statusCode: 404 });
+
+  if (!consumeSecondFactor(account, role, code)) {
+    recordLogin(id, role, { ...meta, status: 'failed-2fa' });
+    throw Object.assign(new Error('That code is not valid. Check your authenticator app and try again.'), { statusCode: 401 });
+  }
+
+  const token = signToken({ id: account.id, email: account.email, role });
+  recordLogin(id, role, meta);
   return { token, user: { ...stripSensitive(account), role } };
 };
 
@@ -221,6 +375,8 @@ const deleteUser = (id) => {
 
 module.exports = {
   createUser, loginUser, logoutUser, getUserById,
+  startTwoFactorSetup, confirmTwoFactorSetup, disableTwoFactor,
+  getTwoFactorStatus, completeTwoFactorLogin,
   updateUserProfile, updateNotifications, updatePrivacy, deleteUser,
   findDoctorById, findAdminById, findAdminByEmail,
   updateAdminProfile, changePassword, getLoginHistory,

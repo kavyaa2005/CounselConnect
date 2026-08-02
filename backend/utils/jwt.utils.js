@@ -4,8 +4,8 @@ const { jwtSecret, jwtExpiresIn } = require('../config/app.config');
 // In-memory token blacklist (for logout)
 const blacklistedTokens = new Set();
 
-const signToken = (payload) => {
-  return jwt.sign(payload, jwtSecret, { expiresIn: jwtExpiresIn });
+const signToken = (payload, options = {}) => {
+  return jwt.sign(payload, jwtSecret, { expiresIn: jwtExpiresIn, ...options});
 };
 
 const verifyToken = (token) => {
