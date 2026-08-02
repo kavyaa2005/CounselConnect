@@ -53,6 +53,8 @@ app.use('/api/counselors',    counselorRoutes);
 app.use('/api/ai',            aiRoutes);
 app.use('/api/journey',       journeyRoutes);
 app.use('/api/session-notes', sessionNoteRoutes);
+app.use('/api/emergency',     require('./routes/emergency.routes'));
+app.use('/api/support',       require('./routes/support.routes'));
 app.use('/api/notifications', notifRoutes);
 app.use('/api/doctor',        doctorRoutes);
 app.use('/api/admin',         adminRoutes);

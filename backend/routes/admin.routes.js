@@ -54,6 +54,12 @@ router.post('/notifications', ctrl.createNotification);
 router.put('/notifications/:id/read', ctrl.readNotification);
 router.delete('/notifications/:id', ctrl.deleteNotification);
 
+/* support tickets */
+router.get('/support/tickets', require('../controllers/support.controller').allTickets);
+router.get('/support/tickets/:id', require('../controllers/support.controller').adminTicket);
+router.post('/support/tickets/:id/reply', require('../controllers/support.controller').replyAsAdmin);
+router.put('/support/tickets/:id/status', require('../controllers/support.controller').setStatus);
+
 /* settings & profile */
 router.get('/settings', ctrl.getSettings);
 router.put('/settings', ctrl.updateSettings);
