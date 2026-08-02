@@ -1,244 +1,621 @@
-import { useState, useEffect } from 'react';
+// Client-side video / voice sessions.
+//
+// The WebRTC engine lives in lib/callClient.ts — this page is the lobby, the
+// in-call surface and the controls. Media flows browser-to-browser; the
+// backend only relays signalling.
+
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, MicOff, Video, VideoOff, Monitor, PhoneOff, MessageSquare, FileText, Wifi, Clock } from 'lucide-react';
+import {
+  Mic, MicOff, Video, VideoOff, Monitor, MonitorOff, PhoneOff, MessageSquare,
+  Clock, Send, Search, AlertCircle, Loader2, CheckCircle, History, Phone,
+} from 'lucide-react';
 import { CC } from '../../lib/colors';
 import { api } from '../../lib/api';
+import { CallSession, getSocket, checkVideoSupport } from '../../lib/callClient';
+import type { CallStatus, IncomingCall } from '../../lib/callClient';
+import { takePendingCall } from '../../lib/callInbox';
 
 export function VideoPage() {
-  const [muted, setMuted] = useState(false);
-  const [videoOff, setVideoOff] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [notes, setNotes] = useState('');
-  const [sessionTime, setSessionTime] = useState('00:00');
-  const [counselorName, setCounselorName] = useState('Your Counselor');
+  /* ── lobby ── */
+  const [contacts, setContacts] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
+
+  /* ── call ── */
+  const [status, setStatus] = useState<CallStatus>('idle');
+  const [peer, setPeer] = useState<any | null>(null);
+  const [incoming, setIncoming] = useState<IncomingCall | null>(null);
+  const [callError, setCallError] = useState<string | null>(null);
+  const [endedReason, setEndedReason] = useState<string | null>(null);
+  const [diagnostic, setDiagnostic] = useState('');
+  /** Voice-only is a deliberate choice, not just a no-camera fallback. */
+  const [audioOnly, setAudioOnly] = useState(false);
+
+  /* ── in-call controls ── */
+  const [micOn, setMicOn] = useState(true);
+  const [cameraOn, setCameraOn] = useState(true);
+  const [sharing, setSharing] = useState(false);
+  const [peerState, setPeerState] = useState<{ muted?: boolean; videoOff?: boolean }>({});
+  const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [seconds, setSeconds] = useState(0);
 
-  // Live session timer
+  // Streams live in state, not just refs: getUserMedia resolves while the
+  // lobby is still on screen, so the <video> element doesn't exist yet.
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const sessionRef = useRef<CallSession | null>(null);
+  const support = checkVideoSupport();
+
+  /* ─────────── lobby data ─────────── */
+  const loadLobby = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [c, h] = await Promise.all([
+        api.get('/video/contacts'),
+        api.get('/video/history'),
+      ]);
+      setContacts(c.data.contacts || []);
+      setHistory(h.data.history || []);
+    } catch (e: any) {
+      setLoadError(e.message || 'Could not load your counselors');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { loadLobby(); }, [loadLobby]);
+
+  /* ─────────── presence + incoming ─────────── */
   useEffect(() => {
-    const start = Date.now();
-    const t = setInterval(() => {
-      const s = Math.floor((Date.now() - start) / 1000);
-      setSessionTime(`${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`);
-    }, 1000);
+    if (!contacts.length) return;
+    const sock = getSocket();
+
+    const refreshPresence = () => {
+      sock.emit('presence:list',
+        { contacts: contacts.map(c => ({ id: c.id, role: c.role })) },
+        (res: any) => { if (res?.online) setOnlineIds(new Set(res.online)); });
+    };
+
+    const onPresence = ({ id, online }: any) => {
+      setOnlineIds(prev => {
+        const next = new Set(prev);
+        if (online) next.add(id); else next.delete(id);
+        return next;
+      });
+    };
+    const onIncoming = (p: IncomingCall) => setIncoming(p);
+    const onCancelled = () => setIncoming(null);
+
+    sock.on('presence:update', onPresence);
+    sock.on('call:incoming', onIncoming);
+    sock.on('call:cancelled', onCancelled);
+    refreshPresence();
+    const poll = setInterval(refreshPresence, 15000);
+
+    return () => {
+      clearInterval(poll);
+      sock.off('presence:update', onPresence);
+      sock.off('call:incoming', onIncoming);
+      sock.off('call:cancelled', onCancelled);
+    };
+  }, [contacts]);
+
+  /* ─────────── timer ─────────── */
+  useEffect(() => {
+    if (status !== 'connected') { setSeconds(0); return; }
+    const t = setInterval(() => setSeconds(s => s + 1), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [status]);
 
-  // Pull the real counselor from the user's next confirmed appointment
+  const clock = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+
+  /* ─────────── session wiring ─────────── */
+  const buildSession = useCallback(() => {
+    sessionRef.current?.destroy();
+    const s = new CallSession({
+      onStatus: (st, info) => {
+        setStatus(st);
+        if (st === 'ended') {
+          setEndedReason(info?.reason || null);
+          setTimeout(() => {
+            setStatus('idle');
+            setPeer(null);
+            setEndedReason(null);
+            setLocalStream(null);
+            setRemoteStream(null);
+            loadLobby();
+          }, 1600);
+        }
+      },
+      onLocalStream: setLocalStream,
+      onRemoteStream: setRemoteStream,
+      onPeerState: setPeerState,
+      onError: (m) => setCallError(m),
+      onDiagnostic: setDiagnostic,
+    });
+    sessionRef.current = s;
+    return s;
+  }, [loadLobby]);
+
+  useEffect(() => () => { sessionRef.current?.destroy(); }, []);
+
+  // Attach streams once both the stream AND the <video> element exist
   useEffect(() => {
-    api.get('/appointments').then(res => {
-      const appts = (res.data.appointments || [])
-        .filter((a: any) => a.status === 'confirmed')
-        .sort((a: any, b: any) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
-      const next = appts.find((a: any) => new Date(a.dateTime) >= new Date()) || appts[appts.length - 1];
-      if (next) {
-        setCounselorName(next.counselorName);
-        api.get(`/messages/${next.counselorId}`).then(r => {
-          setChatMessages((r.data.messages || []).slice(-6).map((m: any) => ({ text: m.text, isMe: m.isMe })));
-        }).catch(() => {});
+    if (localVideoRef.current && localStream) localVideoRef.current.srcObject = localStream;
+  }, [localStream, status]);
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
+  }, [remoteStream, status]);
+
+  /* ─────────── placing a call ─────────── */
+  async function startCall(contact: any, voiceOnly = false) {
+    setCallError(null);
+    setDiagnostic('');
+    setPeer(contact);
+    setAudioOnly(voiceOnly);
+    setMicOn(true);
+    setCameraOn(!voiceOnly);
+    setStatus('calling');
+
+    const s = buildSession();
+    try {
+      const res = await s.call(contact.id, contact.role, { audioOnly: voiceOnly });
+      if (!res.ok) {
+        setCallError(
+          res.error === 'offline' ? `${contact.name} isn't online right now.`
+          : res.error === 'timeout' ? 'No answer.'
+          : res.error === 'not-connected' ? 'You can only call your own counselor.'
+          : 'Could not start the call.'
+        );
+        setStatus('idle');
+        setPeer(null);
       }
-    }).catch(() => {});
+    } catch (e: any) {
+      setCallError(e.message || 'Could not start the call');
+      setStatus('idle');
+      setPeer(null);
+    }
+  }
+
+  /* ─────────── answering ─────────── */
+  const answerCall = useCallback(async (call: IncomingCall, known?: any) => {
+    const voiceOnly = !!(call as any).audioOnly;
+    const contact = known || {
+      id: call.from.id, role: call.from.role, name: call.fromName, avatar: '',
+    };
+    setIncoming(null);
+    setPeer(contact);
+    setAudioOnly(voiceOnly);
+    setMicOn(true);
+    setCameraOn(!voiceOnly);
+    setCallError(null);
+
+    const s = buildSession();
+    try {
+      await s.accept(call.callId, { audioOnly: voiceOnly });
+    } catch (e: any) {
+      setCallError(e.message || 'Could not answer');
+      setStatus('idle');
+      setPeer(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildSession]);
+
+  // Handed off from the global ringer on another screen
+  useEffect(() => {
+    const handed = takePendingCall();
+    if (handed) answerCall(handed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 80px)', backgroundColor: '#0f1a16' }}>
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-6 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: '#22c55e' }} />
-          <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem' }}>Session in progress</span>
+  const acceptIncoming = () => {
+    if (!incoming) return;
+    answerCall(incoming, contacts.find(c => c.id === incoming.from.id));
+  };
+  const declineIncoming = () => {
+    if (!incoming) return;
+    new CallSession({}).reject(incoming.callId);
+    setIncoming(null);
+  };
+
+  /* ─────────── in-call controls ─────────── */
+  function hangUp() {
+    if (status === 'calling') sessionRef.current?.cancel();
+    else sessionRef.current?.end();
+    setStatus('ended');
+    setEndedReason('you-hung-up');
+    setTimeout(() => {
+      setStatus('idle'); setPeer(null); setEndedReason(null);
+      setLocalStream(null); setRemoteStream(null); loadLobby();
+    }, 1600);
+  }
+
+  function toggleMic() { const n = !micOn; setMicOn(n); sessionRef.current?.setMuted(!n); }
+  function toggleCam() { const n = !cameraOn; setCameraOn(n); sessionRef.current?.setVideoOff(!n); }
+
+  async function toggleShare() {
+    if (!sessionRef.current) return;
+    if (sharing) { await sessionRef.current.stopScreenShare(); setSharing(false); }
+    else { setSharing(await sessionRef.current.startScreenShare()); }
+  }
+
+  /* ─────────── chat ─────────── */
+  useEffect(() => {
+    if (!['connecting', 'connected'].includes(status) || !peer?.id) return;
+    const load = () => api.get(`/messages/${peer.id}`)
+      .then(r => setChatMessages((r.data.messages || []).slice(-20)))
+      .catch(() => {});
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [status, peer?.id]);
+
+  async function sendChat() {
+    const text = chatInput.trim();
+    if (!text || !peer?.id) return;
+    setChatInput('');
+    setChatMessages(m => [...m, { id: Date.now(), text, isMe: true, time: 'now' }]);
+    try { await api.post('/messages/send', { counselorId: peer.id, text }); } catch { /* local echo kept */ }
+  }
+
+  const filtered = contacts.filter(c =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    (c.subtitle || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  const inCall = ['calling', 'connecting', 'connected', 'ended'].includes(status);
+
+  /* ─────────── incoming banner ─────────── */
+  const incomingBanner = incoming && (
+    <motion.div
+      initial={{ y: -80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -80, opacity: 0 }}
+      style={{
+        position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 200,
+        background: 'white', borderRadius: 20, padding: '16px 20px', minWidth: 340,
+        boxShadow: '0 16px 48px rgba(0,0,0,0.18)', border: `1px solid ${CC.softSage}`,
+      }}>
+      <div className="flex items-center gap-3">
+        <motion.div
+          animate={{ scale: [1, 1.12, 1] }} transition={{ duration: 1.2, repeat: Infinity }}
+          className="w-11 h-11 rounded-2xl flex items-center justify-center"
+          style={{ background: CC.forestSage }}>
+          <Phone size={18} color="white" />
+        </motion.div>
+        <div className="flex-1 min-w-0">
+          <p style={{ fontWeight: 700, color: CC.primaryText, fontSize: '0.94rem' }}>{incoming.fromName}</p>
+          <p style={{ color: CC.mutedOlive, fontSize: '0.78rem' }}>
+            Incoming {(incoming as any).audioOnly ? 'voice' : 'video'} call…
+          </p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Clock size={14} color="rgba(255,255,255,0.5)" />
-            <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', fontFamily: 'monospace' }}>{sessionTime}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Wifi size={14} color="#22c55e" />
-            <span style={{ color: '#22c55e', fontSize: '0.78rem' }}>Excellent</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: CC.terracotta }}>
-            <span style={{ color: 'white', fontSize: '0.7rem', fontWeight: 700 }}>CC</span>
-          </div>
-          <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.82rem' }}>CounselConnect</span>
-        </div>
+        <button onClick={declineIncoming} className="px-3 py-2 rounded-xl"
+          style={{ background: '#FEF2F2', color: '#EF5350', border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+          Decline
+        </button>
+        <button onClick={acceptIncoming} className="px-3 py-2 rounded-xl"
+          style={{ background: CC.forestSage, color: 'white', border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+          Answer
+        </button>
       </div>
+    </motion.div>
+  );
 
-      {/* Main area */}
-      <div className="flex-1 flex gap-4 p-4 overflow-hidden">
-        {/* Video grid */}
-        <div className="flex-1 flex flex-col gap-4">
-          <div className="flex-1 relative rounded-3xl overflow-hidden" style={{ backgroundColor: '#1a2820' }}>
-            {/* Counselor video */}
-            <img
-              src="https://images.unsplash.com/photo-1714976694867-bc0e012fab70?w=1200&h=700&fit=crop"
-              alt="Session"
-              className="w-full h-full object-cover"
-              style={{ opacity: 0.9 }}
-            />
+  /* ═══════════════ LOBBY ═══════════════ */
+  if (!inCall) {
+    return (
+      <div className="p-8" style={{ backgroundColor: CC.luxuryBg, minHeight: '100%' }}>
+        <AnimatePresence>{incomingBanner}</AnimatePresence>
 
-            {/* Overlay gradient */}
-            <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(15,26,22,0.2) 0%, transparent 30%, transparent 70%, rgba(15,26,22,0.6) 100%)' }} />
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <p style={{ color: CC.mutedOlive, fontSize: '0.875rem', marginBottom: 4 }}>Talk face to face</p>
+          <h1 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 800, fontSize: '1.9rem', color: CC.primaryText, marginBottom: 24 }}>
+            Video Sessions
+          </h1>
 
-            {/* Counselor name badge */}
-            <div className="absolute top-4 left-4 px-3 py-2 rounded-xl flex items-center gap-2" style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#22c55e' }} />
-              <span style={{ color: 'white', fontSize: '0.82rem', fontWeight: 600 }}>{counselorName}</span>
+          {!support.ok && (
+            <div className="p-4 rounded-2xl mb-5 flex items-start gap-3" style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}>
+              <AlertCircle size={18} color="#EF5350" style={{ flexShrink: 0, marginTop: 2 }} />
+              <p style={{ color: '#B91C1C', fontSize: '0.85rem', lineHeight: 1.6 }}>{support.reason}</p>
+            </div>
+          )}
+
+          {callError && (
+            <div className="p-4 rounded-2xl mb-5 flex items-start gap-3" style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}>
+              <AlertCircle size={18} color="#EF5350" style={{ flexShrink: 0, marginTop: 2 }} />
+              <p style={{ color: '#B91C1C', fontSize: '0.85rem', lineHeight: 1.6 }}>{callError}</p>
+            </div>
+          )}
+
+          {/* Counselors */}
+          <div className="rounded-3xl overflow-hidden mb-5"
+            style={{ background: 'white', border: `1px solid ${CC.softSage}`, boxShadow: '0 2px 16px rgba(0,0,0,0.04)' }}>
+            <div className="px-6 py-4 flex items-center justify-between gap-3 flex-wrap" style={{ borderBottom: `1px solid ${CC.softSage}` }}>
+              <h2 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: '0.98rem', color: CC.primaryText }}>
+                Your counselors
+              </h2>
+              <div className="relative">
+                <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: CC.mutedOlive }} />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
+                  style={{
+                    paddingLeft: 32, paddingRight: 12, paddingTop: 8, paddingBottom: 8,
+                    borderRadius: 12, border: `1px solid ${CC.softSage}`, background: CC.luxuryBg,
+                    fontSize: '0.82rem', color: CC.primaryText, outline: 'none', width: 200,
+                  }} />
+              </div>
             </div>
 
-            {/* Self video (PiP) */}
-            <motion.div
-              drag
-              dragMomentum={false}
-              className="absolute bottom-4 right-4 rounded-2xl overflow-hidden"
-              style={{ width: 180, height: 130, backgroundColor: '#28463a', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', cursor: 'grab' }}
-              whileDrag={{ cursor: 'grabbing' }}
-            >
-              {videoOff ? (
-                <div className="w-full h-full flex flex-col items-center justify-center">
-                  <VideoOff size={24} color="rgba(255,255,255,0.4)" />
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', marginTop: 4 }}>Camera off</p>
-                </div>
-              ) : (
-                <img
-                  src="https://images.unsplash.com/photo-1768828246616-e86833c66dea?w=200&h=150&fit=crop"
-                  alt="You"
-                  className="w-full h-full object-cover"
-                  style={{ opacity: 0.9 }}
-                />
-              )}
-              <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-lg" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                <span style={{ color: 'white', fontSize: '0.65rem' }}>You</span>
+            {loading && (
+              <div className="px-6 py-10 flex items-center justify-center gap-2">
+                <Loader2 size={16} color={CC.mutedOlive} className="animate-spin" />
+                <span style={{ color: CC.mutedOlive, fontSize: '0.85rem' }}>Loading…</span>
               </div>
-            </motion.div>
+            )}
+
+            {loadError && (
+              <div className="px-6 py-8 text-center">
+                <p style={{ color: CC.mutedOlive, fontSize: '0.85rem', marginBottom: 10 }}>{loadError}</p>
+                <button onClick={loadLobby} className="px-4 py-2 rounded-xl"
+                  style={{ background: CC.forestSage, color: 'white', border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                  Try again
+                </button>
+              </div>
+            )}
+
+            {!loading && !loadError && !filtered.length && (
+              <div className="px-6 py-10 text-center">
+                <p style={{ fontSize: '1.6rem', marginBottom: 8 }}>💬</p>
+                <p style={{ color: CC.mutedOlive, fontSize: '0.85rem', lineHeight: 1.7 }}>
+                  You can call a counselor once you've booked a session or started a conversation with them.
+                </p>
+              </div>
+            )}
+
+            {!loading && filtered.map(c => {
+              const online = onlineIds.has(c.id);
+              const callable = online && support.ok;
+              return (
+                <div key={c.id} className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: `1px solid ${CC.softSage}66` }}>
+                  <div className="relative shrink-0">
+                    {c.avatar
+                      ? <img src={c.avatar} alt={c.name} className="w-11 h-11 rounded-2xl object-cover" />
+                      : <div className="w-11 h-11 rounded-2xl flex items-center justify-center"
+                          style={{ background: CC.softSage, color: CC.forestSage, fontWeight: 700 }}>
+                          {c.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                        </div>}
+                    <span style={{
+                      position: 'absolute', bottom: -1, right: -1, width: 12, height: 12, borderRadius: '50%',
+                      background: online ? '#22c55e' : CC.mutedOlive, border: '2px solid white',
+                    }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p style={{ fontWeight: 600, color: CC.primaryText, fontSize: '0.9rem' }} className="truncate">{c.name}</p>
+                    <p style={{ color: online ? '#22c55e' : CC.mutedOlive, fontSize: '0.76rem' }}>
+                      {online ? 'Available now' : 'Offline'}
+                    </p>
+                  </div>
+
+                  {/* Voice and video are separate deliberate choices */}
+                  <button onClick={() => startCall(c, true)} disabled={!callable}
+                    title={callable ? `Voice call ${c.name}` : 'Not available'}
+                    className="px-3 py-2 rounded-xl flex items-center gap-1.5 shrink-0"
+                    style={{
+                      background: callable ? CC.softSage : 'transparent',
+                      color: callable ? CC.forestSage : CC.mutedOlive,
+                      border: `1px solid ${CC.softSage}`,
+                      cursor: callable ? 'pointer' : 'not-allowed',
+                      opacity: callable ? 1 : 0.5, fontSize: '0.8rem', fontWeight: 600,
+                    }}>
+                    <Phone size={14} /> Voice
+                  </button>
+                  <button onClick={() => startCall(c)} disabled={!callable}
+                    title={callable ? `Video call ${c.name}` : 'Not available'}
+                    className="px-3 py-2 rounded-xl flex items-center gap-1.5 shrink-0"
+                    style={{
+                      background: callable ? CC.forestSage : CC.softSage,
+                      color: callable ? 'white' : CC.mutedOlive,
+                      border: 'none', cursor: callable ? 'pointer' : 'not-allowed',
+                      opacity: callable ? 1 : 0.6, fontSize: '0.8rem', fontWeight: 600,
+                    }}>
+                    <Video size={14} /> Video
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
-          {/* Controls */}
-          <div className="flex items-center justify-center gap-3 py-2">
-            <motion.button
-              onClick={() => setMuted(!muted)}
-              className="w-12 h-12 rounded-2xl flex items-center justify-center"
-              style={{ backgroundColor: muted ? CC.terracotta : 'rgba(255,255,255,0.1)' }}
-              whileHover={{ scale: 1.08 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              {muted ? <MicOff size={20} color="white" /> : <Mic size={20} color="white" />}
-            </motion.button>
+          {/* Recent calls */}
+          {history.length > 0 && (
+            <div className="rounded-3xl overflow-hidden"
+              style={{ background: 'white', border: `1px solid ${CC.softSage}`, boxShadow: '0 2px 16px rgba(0,0,0,0.04)' }}>
+              <div className="px-6 py-4 flex items-center gap-2" style={{ borderBottom: `1px solid ${CC.softSage}` }}>
+                <History size={16} color={CC.forestSage} />
+                <h2 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: '0.98rem', color: CC.primaryText }}>
+                  Recent calls
+                </h2>
+              </div>
+              {history.slice(0, 6).map(call => (
+                <div key={call.id} className="px-6 py-3.5 flex items-center gap-3" style={{ borderBottom: `1px solid ${CC.softSage}66` }}>
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ background: call.status === 'ended' ? '#EAF7EA' : call.status === 'missed' ? '#FEF2F2' : CC.softSage }}>
+                    {call.status === 'ended'
+                      ? <CheckCircle size={15} color="#22c55e" />
+                      : <PhoneOff size={15} color={call.status === 'missed' ? '#EF5350' : CC.mutedOlive} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p style={{ fontWeight: 600, color: CC.primaryText, fontSize: '0.88rem' }} className="truncate">{call.peerName}</p>
+                    <p style={{ color: CC.mutedOlive, fontSize: '0.76rem' }}>
+                      {call.direction === 'outgoing' ? 'Outgoing' : 'Incoming'} · {call.dateLabel}
+                    </p>
+                  </div>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: call.status === 'ended' ? CC.forestSage : CC.mutedOlive }}>
+                    {call.status === 'ended' ? call.durationLabel
+                      : call.status === 'missed' ? 'Missed'
+                      : call.status === 'rejected' ? 'Declined' : 'Not connected'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      </div>
+    );
+  }
 
-            <motion.button
-              onClick={() => setVideoOff(!videoOff)}
-              className="w-12 h-12 rounded-2xl flex items-center justify-center"
-              style={{ backgroundColor: videoOff ? CC.terracotta : 'rgba(255,255,255,0.1)' }}
-              whileHover={{ scale: 1.08 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              {videoOff ? <VideoOff size={20} color="white" /> : <Video size={20} color="white" />}
-            </motion.button>
-
-            <motion.button
-              className="w-12 h-12 rounded-2xl flex items-center justify-center"
-              style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
-              whileHover={{ scale: 1.08 }}
-            >
-              <Monitor size={20} color="white" />
-            </motion.button>
-
-            <motion.button
-              onClick={() => { setChatOpen(!chatOpen); setNotesOpen(false); }}
-              className="w-12 h-12 rounded-2xl flex items-center justify-center"
-              style={{ backgroundColor: chatOpen ? CC.forestSage : 'rgba(255,255,255,0.1)' }}
-              whileHover={{ scale: 1.08 }}
-            >
-              <MessageSquare size={20} color="white" />
-            </motion.button>
-
-            <motion.button
-              onClick={() => { setNotesOpen(!notesOpen); setChatOpen(false); }}
-              className="w-12 h-12 rounded-2xl flex items-center justify-center"
-              style={{ backgroundColor: notesOpen ? CC.forestSage : 'rgba(255,255,255,0.1)' }}
-              whileHover={{ scale: 1.08 }}
-            >
-              <FileText size={20} color="white" />
-            </motion.button>
-
-            {/* End call */}
-            <motion.button
-              className="px-6 h-12 rounded-2xl flex items-center gap-2 text-white"
-              style={{ backgroundColor: '#e53e3e', fontWeight: 600, fontSize: '0.9rem' }}
-              whileHover={{ scale: 1.05, backgroundColor: '#c53030' }}
-              whileTap={{ scale: 0.97 }}
-            >
-              <PhoneOff size={18} />
-              End Session
-            </motion.button>
+  /* ═══════════════ IN CALL ═══════════════ */
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#0F1512', fontFamily: 'Inter' }}>
+      <div style={{ padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div>
+          <p style={{ color: 'white', fontWeight: 700, fontSize: 15 }}>{peer?.name}</p>
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12.5 }}>
+            {status === 'calling' ? 'Calling…'
+              : status === 'connecting' ? 'Connecting…'
+              : status === 'connected' ? `${audioOnly ? 'Voice call' : 'Video session'} · ${clock}`
+              : 'Session ended'}
+          </p>
+        </div>
+        {status === 'connected' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 9, background: 'rgba(255,255,255,0.08)', color: 'white', fontSize: 12 }}>
+            <Clock size={12} /> {clock}
           </div>
+        )}
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Stage */}
+        <div style={{ flex: 1, position: 'relative', background: '#0B0F0D' }}>
+          {status === 'connected' && !audioOnly ? (
+            <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+              <motion.div
+                animate={status === 'connected' ? {} : { scale: [1, 1.06, 1] }}
+                transition={{ duration: 1.6, repeat: Infinity }}
+                style={{ width: 92, height: 92, borderRadius: 28, background: 'rgba(255,255,255,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {audioOnly ? <Phone size={34} color="rgba(255,255,255,0.75)" /> : <Video size={34} color="rgba(255,255,255,0.75)" />}
+              </motion.div>
+              <p style={{ color: 'white', fontWeight: 600, fontSize: 16 }}>{peer?.name}</p>
+              <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>
+                {status === 'calling' ? 'Ringing…'
+                  : status === 'connecting' ? (diagnostic || 'Connecting…')
+                  : status === 'connected' ? 'Voice call in progress'
+                  : endedReason === 'you-hung-up' ? 'You ended the session' : 'Session ended'}
+              </p>
+            </div>
+          )}
+
+          {status === 'connected' && (peerState.muted || peerState.videoOff) && (
+            <div style={{ position: 'absolute', top: 16, left: 16, display: 'flex', gap: 8 }}>
+              {peerState.muted && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 8, background: 'rgba(0,0,0,0.55)', color: 'white', fontSize: 12 }}>
+                  <MicOff size={12} /> Muted
+                </span>
+              )}
+              {peerState.videoOff && !audioOnly && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 8, background: 'rgba(0,0,0,0.55)', color: 'white', fontSize: 12 }}>
+                  <VideoOff size={12} /> Camera off
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Self view — pointless on a voice call */}
+          {!audioOnly && (
+            <div style={{ position: 'absolute', bottom: 20, right: 20, width: 190, height: 130, borderRadius: 16, overflow: 'hidden', background: '#111', border: '2px solid rgba(255,255,255,0.12)' }}>
+              <video ref={localVideoRef} autoPlay playsInline muted
+                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)', display: cameraOn ? 'block' : 'none' }} />
+              {!cameraOn && (
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <VideoOff size={22} color="rgba(255,255,255,0.4)" />
+                </div>
+              )}
+              <span style={{ position: 'absolute', bottom: 6, left: 8, fontSize: 11.5, color: 'rgba(255,255,255,0.75)' }}>
+                You{!micOn && ' · muted'}
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Side panel */}
+        {/* Chat */}
         <AnimatePresence>
-          {(chatOpen || notesOpen) && (
+          {showChat && (
             <motion.div
-              initial={{ opacity: 0, width: 0, x: 20 }}
-              animate={{ opacity: 1, width: 320, x: 0 }}
-              exit={{ opacity: 0, width: 0, x: 20 }}
-              className="flex-shrink-0 rounded-3xl overflow-hidden flex flex-col"
-              style={{ backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-            >
-              {chatOpen && (
-                <>
-                  <div className="p-4 border-b" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-                    <p style={{ color: 'white', fontWeight: 700, fontSize: '0.95rem' }}>Session Chat</p>
+              initial={{ width: 0, opacity: 0 }} animate={{ width: 320, opacity: 1 }} exit={{ width: 0, opacity: 0 }}
+              style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'rgba(255,255,255,0.04)', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                <span style={{ color: 'white', fontWeight: 600, fontSize: 14 }}>Session chat</span>
+                <button onClick={() => setShowChat(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>✕</button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {!chatMessages.length && (
+                  <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13, textAlign: 'center', marginTop: 20 }}>No messages yet</p>
+                )}
+                {chatMessages.map((m, i) => (
+                  <div key={m.id || i} style={{ display: 'flex', justifyContent: m.isMe ? 'flex-end' : 'flex-start' }}>
+                    <div style={{ padding: '8px 12px', borderRadius: 14, maxWidth: '85%', fontSize: 13, color: 'white', background: m.isMe ? CC.forestSage : 'rgba(255,255,255,0.09)' }}>
+                      {m.text}
+                    </div>
                   </div>
-                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                    {chatMessages.map((msg, i) => (
-                      <div key={i} className={`flex ${msg.isMe ? 'justify-end' : ''}`}>
-                        <div
-                          className="max-w-[80%] px-3 py-2 rounded-xl"
-                          style={{
-                            backgroundColor: msg.isMe ? CC.forestSage : 'rgba(255,255,255,0.1)',
-                            color: 'white',
-                            fontSize: '0.82rem',
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          {msg.text}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="p-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-                    <input
-                      placeholder="Type a message..."
-                      className="w-full px-3 py-2.5 rounded-xl outline-none text-sm"
-                      style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'white', border: 'none' }}
-                    />
-                  </div>
-                </>
-              )}
-
-              {notesOpen && (
-                <>
-                  <div className="p-4 border-b" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-                    <p style={{ color: 'white', fontWeight: 700, fontSize: '0.95rem' }}>Session Notes</p>
-                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', marginTop: 2 }}>Private notes for this session</p>
-                  </div>
-                  <div className="flex-1 p-4">
-                    <textarea
-                      value={notes}
-                      onChange={e => setNotes(e.target.value)}
-                      placeholder="Take notes during your session..."
-                      className="w-full h-full outline-none resize-none bg-transparent"
-                      style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.88rem', lineHeight: 1.7 }}
-                    />
-                  </div>
-                </>
-              )}
+                ))}
+              </div>
+              <div style={{ padding: 12, display: 'flex', gap: 8, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <input value={chatInput} onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && sendChat()} placeholder="Type a message…"
+                  style={{ flex: 1, padding: '9px 12px', borderRadius: 12, fontSize: 13, fontFamily: 'Inter', background: 'rgba(255,255,255,0.07)', border: 'none', color: 'white', outline: 'none' }} />
+                <button onClick={sendChat}
+                  style={{ width: 36, height: 36, borderRadius: 12, flexShrink: 0, border: 'none', cursor: 'pointer', background: CC.forestSage, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Send size={15} color="white" />
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
+
+      {/* Controls */}
+      <div style={{ padding: '20px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'rgba(255,255,255,0.03)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <Ctrl onClick={toggleMic} danger={!micOn} label={micOn ? 'Mute' : 'Unmute'}
+          icon={micOn ? <Mic size={19} /> : <MicOff size={19} />} />
+        {!audioOnly && (
+          <>
+            <Ctrl onClick={toggleCam} danger={!cameraOn} label={cameraOn ? 'Stop video' : 'Start video'}
+              icon={cameraOn ? <Video size={19} /> : <VideoOff size={19} />} />
+            <Ctrl onClick={toggleShare} active={sharing} label={sharing ? 'Stop sharing' : 'Share screen'}
+              icon={sharing ? <MonitorOff size={19} /> : <Monitor size={19} />} />
+          </>
+        )}
+        <Ctrl onClick={() => setShowChat(s => !s)} active={showChat} label="Chat"
+          icon={<MessageSquare size={19} />} />
+        <button onClick={hangUp}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '0 24px', height: 48, marginLeft: 8,
+            borderRadius: 16, border: 'none', cursor: 'pointer', background: '#EF4444',
+            color: 'white', fontWeight: 600, fontSize: 14, fontFamily: 'Inter',
+          }}>
+          <PhoneOff size={18} /> {status === 'calling' ? 'Cancel' : 'End session'}
+        </button>
+      </div>
     </div>
+  );
+}
+
+function Ctrl({ onClick, active, danger, icon, label }: any) {
+  return (
+    <button onClick={onClick} title={label} aria-label={label}
+      style={{
+        width: 48, height: 48, borderRadius: 16, border: 'none', cursor: 'pointer', color: 'white',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: danger ? '#EF4444' : active ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.09)',
+      }}>
+      {icon}
+    </button>
   );
 }
