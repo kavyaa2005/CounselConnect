@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Camera, Plus, X, Star, Award, Globe, Phone, Mail, MapPin, Clock } from 'lucide-react';
 import { useTheme } from '../ThemeContext';
 import { api } from '../../../lib/api';
@@ -37,24 +37,85 @@ export function ProfilePage() {
   const [form, setForm] = useState<any>({});
   useEffect(() => { if (profile) setForm({ firstName: profile.firstName, lastName: profile.lastName, phone: profile.phone, bio: profile.bio, price: profile.price }); }, [profile]);
 
+  const [uploading, setUploading] = useState(false);
+  const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
+
+  const flash = (text: string, bad = false) => {
+    setToast({ text, bad });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   const saveProfile = async () => {
     try {
-      const res = await api.put('/doctor/profile', { firstName: form.firstName, lastName: form.lastName, phone: form.phone, bio: form.bio, price: Number(form.price) || profile?.price });
+      const res = await api.put('/doctor/profile', {
+        firstName: form.firstName,
+        lastName: form.lastName,
+        phone: form.phone,
+        bio: form.bio,
+        // Asked for by the spec and previously not stored at all
+        qualification: form.qualification,
+        licenseNumber: form.licenseNumber,
+        location: form.location,
+        experience: form.experience,
+        price: Number(form.price) || profile?.price,
+      });
       setProfile(res.data.profile);
-    } catch { /* ignore */ }
+      flash('Profile updated');
+    } catch (e: any) { flash(e.message || 'Could not save', true); }
     setEditing(false);
+  };
+
+  /** Uploads a new avatar — this appears on every counselor card clients browse. */
+  const uploadPhoto = async (file: File) => {
+    if (!/^image\//.test(file.type)) { flash('Choose an image file', true); return; }
+    if (file.size > 4 * 1024 * 1024) { flash('Images must be under 4 MB', true); return; }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('photo', file);
+      const res = await api.upload('/doctor/profile/photo', fd);
+      setProfile(res.data.profile);
+      flash('Photo updated');
+    } catch (e: any) { flash(e.message || 'Upload failed', true); }
+    finally { setUploading(false); }
   };
 
   return (
     <div style={{ padding: '32px', fontFamily: 'Inter', display: 'flex', gap: 28 }}>
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 400,
+          padding: '11px 20px', borderRadius: 12,
+          background: toast.bad ? '#FFEBEE' : colors.primary,
+          color: toast.bad ? colors.error : 'white',
+          fontFamily: 'Inter', fontSize: 13, fontWeight: 600,
+          boxShadow: '0 8px 28px rgba(0,0,0,0.16)',
+        }}>{toast.text}</div>
+      )}
       {/* Left: Profile Card */}
       <div style={{ width: 280, flexShrink: 0 }}>
         <div style={{ background: colors.white, borderRadius: 24, padding: '28px 20px', boxShadow: shadows.card, border: `1px solid ${colors.border}`, textAlign: 'center' }}>
           <div style={{ position: 'relative', display: 'inline-block', marginBottom: 16 }}>
-            <div style={{ width: 90, height: 90, borderRadius: '50%', background: `linear-gradient(135deg, ${colors.primary}, ${colors.lightSage})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontFamily: 'Inter', fontWeight: 800, fontSize: 28, margin: '0 auto' }}>
-              {initials}
-            </div>
-            <button style={{ position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: '50%', border: 'none', background: colors.primary, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: shadows.card }}>
+            {profile?.image ? (
+              <img
+                src={profile.image.startsWith('http') ? profile.image
+                  : `${(import.meta as any).env.VITE_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5000'}${profile.image}`}
+                alt={profile?.name || 'Profile'}
+                style={{ width: 90, height: 90, borderRadius: '50%', objectFit: 'cover', display: 'block', margin: '0 auto' }}
+              />
+            ) : (
+              <div style={{ width: 90, height: 90, borderRadius: '50%', background: `linear-gradient(135deg, ${colors.primary}, ${colors.lightSage})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontFamily: 'Inter', fontWeight: 800, fontSize: 28, margin: '0 auto' }}>
+                {initials}
+              </div>
+            )}
+            <input ref={photoRef} type="file" accept="image/*" style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); e.target.value = ''; }} />
+            <button
+              onClick={() => photoRef.current?.click()}
+              disabled={uploading}
+              title={uploading ? 'Uploading…' : 'Change photo'}
+              style={{ position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: '50%', border: 'none', background: colors.primary, color: 'white', cursor: uploading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: shadows.card }}>
               <Camera size={13} />
             </button>
           </div>
@@ -133,6 +194,10 @@ export function ProfilePage() {
                 { label: 'Phone', key: 'phone', value: profile?.phone || 'Not set', editable: true },
                 { label: 'Specialty', key: 'specialty', value: profile?.specialty || '—', editable: false },
                 { label: 'Consultation Fee', key: 'price', value: profile?.price ? `$${profile.price}/session` : '—', editable: true },
+                { label: 'Qualifications', key: 'qualification', value: profile?.qualification || 'Not set', editable: true },
+                { label: 'Licence / registration', key: 'licenseNumber', value: profile?.licenseNumber || 'Not set', editable: true },
+                { label: 'Experience', key: 'experience', value: profile?.experience || 'Not set', editable: true },
+                { label: 'Practice location', key: 'location', value: (profile?.location || '').replace(/^[—-]$/, '') || 'Not set', editable: true },
               ].map(field => (
                 <div key={field.label}>
                   <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 12, color: colors.textMuted, marginBottom: 6 }}>{field.label}</label>

@@ -116,18 +116,29 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', fontWeight: 500, marginBottom: 7 }}>{greeting}</div>
           <h2 style={{ fontSize: 24, fontWeight: 800, color: 'white', margin: 0, marginBottom: 7 }}>{stats.doctor?.name}</h2>
           <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', margin: 0 }}>
-            You have <strong style={{ color: 'white' }}>{stats.todaysAppointments?.length || 0} appointment{(stats.todaysAppointments?.length || 0) === 1 ? '' : 's'}</strong> today and <strong style={{ color: 'white' }}>{stats.pendingRequests || 0} upcoming session{(stats.pendingRequests || 0) === 1 ? '' : 's'}</strong>
+            You have <strong style={{ color: 'white' }}>{stats.todaysAppointments?.length || 0} session{(stats.todaysAppointments?.length || 0) === 1 ? '' : 's'}</strong> today
+            {(stats.pendingRequests || 0) > 0
+              ? <> and <strong style={{ color: 'white' }}>{stats.pendingRequests} request{stats.pendingRequests === 1 ? '' : 's'}</strong> waiting on you</>
+              : <> — no requests waiting</>}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
           {[
             { label: 'Today\'s Sessions', value: String(stats.todaysAppointments?.length || 0), icon: Calendar },
+            // Requests waiting on a decision — previously this tile didn't exist
+            // and the underlying field was counting confirmed sessions.
+            { label: 'Pending Requests', value: String(stats.pendingRequests || 0), icon: Clock, alert: (stats.pendingRequests || 0) > 0 },
+            { label: 'Total Patients', value: String(stats.totalPatients || 0), icon: Users },
             { label: 'Avg Mood Score', value: totals.avgMood != null ? String(totals.avgMood) : '—', icon: TrendingUp },
             { label: 'Patient Rating', value: totals.avgRating != null ? `${totals.avgRating}★` : '—', icon: Star },
           ].map((stat, i) => {
             const Icon = stat.icon;
             return (
-              <div key={i} style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '14px 18px', textAlign: 'center', minWidth: 92 }}>
+              <div key={i} style={{
+                background: (stat as any).alert ? 'rgba(255,214,102,0.28)' : 'rgba(255,255,255,0.12)',
+                border: (stat as any).alert ? '1px solid rgba(255,214,102,0.7)' : '1px solid transparent',
+                borderRadius: 14, padding: '14px 18px', textAlign: 'center', minWidth: 92,
+              }}>
                 <Icon size={17} color="rgba(255,255,255,0.8)" style={{ marginBottom: 7 }} />
                 <div style={{ fontSize: 21, fontWeight: 800, color: 'white' }}>{stat.value}</div>
                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.65)', marginTop: 1 }}>{stat.label}</div>
@@ -136,6 +147,36 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           })}
         </div>
       </div>
+
+      {/* Requests waiting on a decision */}
+      {!!(stats.pendingList || []).length && (
+        <div style={{ background: '#FFF9E6', border: '1px solid #FFE082', borderRadius: 18, padding: 18, marginBottom: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Clock size={16} color={c.warning} />
+              <span style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 700, color: c.textPrimary }}>
+                {stats.pendingRequests} session request{stats.pendingRequests === 1 ? '' : 's'} waiting
+              </span>
+            </div>
+            <button onClick={() => onNavigate('appointments')}
+              style={{ padding: '7px 14px', borderRadius: 9, border: 'none', background: c.warning, color: 'white', fontFamily: 'Inter', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
+              Review now
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {(stats.pendingList || []).map((r: any) => (
+              <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', borderRadius: 10, background: c.white }}>
+                <span style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 600, color: c.textPrimary, flex: 1 }}>
+                  {r.patient?.name || 'A patient'}
+                </span>
+                <span style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted }}>
+                  {r.date} · {r.time}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 18 }}>

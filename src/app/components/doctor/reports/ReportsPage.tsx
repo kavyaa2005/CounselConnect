@@ -16,6 +16,7 @@ export function ReportsPage() {
   const [patients, setPatients] = useState<any[]>([]);
   const [feedback, setFeedback] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
+  const [daily, setDaily] = useState<any[]>([]);
   const [period, setPeriod] = useState('This Month');
   const [exporting, setExporting] = useState('');
   const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
@@ -43,6 +44,7 @@ export function ReportsPage() {
     api.get('/doctor/patients').then(res => setPatients(res.data.patients || [])).catch(() => {});
     api.get('/doctor/feedback').then(res => setFeedback(res.data)).catch(() => {});
     api.get('/doctor/appointments').then(res => setAppointments(res.data.appointments || [])).catch(() => {});
+    api.get('/doctor/reports/daily?days=14').then(res => setDaily(res.data.daily || [])).catch(() => {});
   }, []);
 
   // ── All report data computed from real records ──
@@ -227,8 +229,8 @@ export function ReportsPage() {
             <LineChart data={recoveryRate}>
               <CartesianGrid strokeDasharray="3 3" stroke={colors.border} vertical={false} />
               <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 10, fill: colors.textMuted }} />
-              <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 10, fill: colors.textMuted }} tickFormatter={v => `${v}%`} />
-              <Tooltip contentStyle={{ borderRadius: 10, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 11 }} formatter={(v: number) => [`${v}%`, 'Recovery Rate']} />
+              <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 10, fill: colors.textMuted }} tickFormatter={v => `${v / 10}`} />
+              <Tooltip contentStyle={{ borderRadius: 10, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 11 }} formatter={(v: number) => [`${(v / 10).toFixed(1)}/10`, 'Avg mood']} />
               <Line type="monotone" dataKey="rate" stroke={colors.success} strokeWidth={2.5} dot={{ fill: colors.success, r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
@@ -262,6 +264,42 @@ export function ReportsPage() {
             ))}
           </div>
         </div>
+      </div>
+
+
+      {/* Sessions day by day — the reports page only had monthly figures */}
+      <div style={{ background: colors.white, borderRadius: 20, padding: 24, boxShadow: shadows.card, border: `1px solid ${colors.border}` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <div>
+            <h3 style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 700, color: colors.textPrimary, margin: 0 }}>Sessions by day</h3>
+            <p style={{ fontFamily: 'Inter', fontSize: 12, color: colors.textMuted, margin: '2px 0 0' }}>Last 14 days</p>
+          </div>
+          <div style={{ fontFamily: 'Inter', fontSize: 22, fontWeight: 800, color: colors.primary }}>
+            {daily.reduce((s: number, d: any) => s + (d.total || 0), 0)}
+          </div>
+        </div>
+        {!daily.length ? (
+          <p style={{ fontFamily: 'Inter', fontSize: 12.5, color: colors.textMuted, padding: '24px 0', textAlign: 'center' }}>No sessions in this window</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={190}>
+            <BarChart data={daily}>
+              <CartesianGrid strokeDasharray="3 3" stroke={colors.border} vertical={false} />
+              <XAxis dataKey="dayNum" axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 11, fill: colors.textMuted }} />
+              <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 11, fill: colors.textMuted }} />
+              <Tooltip
+                contentStyle={{ borderRadius: 10, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 12 }}
+                labelFormatter={(v: any) => {
+                  const d = daily.find((x: any) => x.dayNum === v);
+                  return d ? `${d.label} ${d.dayNum}` : v;
+                }}
+              />
+              <Legend wrapperStyle={{ fontFamily: 'Inter', fontSize: 11 }} />
+              <Bar dataKey="completed" stackId="a" name="Completed" fill={colors.primary} radius={[0, 0, 0, 0]} />
+              <Bar dataKey="pending" stackId="a" name="Pending" fill={colors.warning} />
+              <Bar dataKey="cancelled" stackId="a" name="Cancelled / declined" fill={colors.textMuted} radius={[5, 5, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
       {/* Session Duration */}

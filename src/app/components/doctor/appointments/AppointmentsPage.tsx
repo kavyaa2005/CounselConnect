@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Plus, ChevronLeft, ChevronRight, Video, Check, X, Calendar, Clock, MoreVertical, MessageSquare, Download } from 'lucide-react';
+import { Search, Plus, ChevronLeft, ChevronRight, Video, Check, X, Calendar, Clock, MoreVertical, MessageSquare, Download, Sparkles } from 'lucide-react';
 import { useTheme } from '../ThemeContext';
 import { api } from '../../../lib/api';
 
@@ -323,6 +323,11 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
   const [calScope, setCalScope] = useState<'Day' | 'Week' | 'Month'>('Day');
   const [rescheduling, setRescheduling] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
+  const [rejecting, setRejecting] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [summary, setSummary] = useState<any>(null);
+  const [summaryFor, setSummaryFor] = useState<string | null>(null);
+  const [summaryBusy, setSummaryBusy] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const flash = (text: string, bad = false) => {
@@ -350,6 +355,12 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
           duration: '50 min',
           notes: `Booked ${new Date(a.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · $${a.price}`,
           dateTime: a.dateTime,
+          reason: a.reason || '',
+          mode: a.mode || 'online',
+          documents: a.documents || [],
+          rejectionReason: a.rejectionReason || '',
+          aiSummary: a.aiSummary || null,
+          createdAt: a.createdAt,
         } as Appointment & { dateTime: string };
       }));
     }).catch(() => {});
@@ -433,7 +444,12 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
     cancelled: { label: 'Cancelled', bg: c.background, color: c.textMuted },
   };
 
-  const filters = ['all', 'confirmed', 'pending', 'completed', 'cancelled', 'rejected'];
+  const filters = ['all', 'pending', 'confirmed', 'completed', 'cancelled', 'rejected'];
+
+  // Requests waiting on a decision — oldest first, they've waited longest.
+  const requests = appointments
+    .filter((a: any) => a.status === 'pending')
+    .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   const filtered = appointments.filter(a => {
     const matchesFilter = activeFilter === 'all' || a.status === activeFilter;
@@ -445,9 +461,58 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
 
   const updateStatus = (id: string, status: AppointmentStatus) => {
     setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
-    // Persist to the backend ('rejected' is stored as 'cancelled')
-    const serverStatus = status === 'rejected' ? 'cancelled' : status;
-    api.put(`/doctor/appointments/${id}`, { status: serverStatus }).catch(() => {});
+    // 'rejected' is now a real status the client is told about — it used to be
+    // silently stored as 'cancelled', which lost the distinction entirely.
+    api.put(`/doctor/appointments/${id}`, { status })
+      .then(() => loadAppointments())
+      .catch((e: any) => flash(e.message || 'Could not update', true));
+  };
+
+  /** Accepts a request — the client can only pay once this happens. */
+  const acceptRequest = async (id: string) => {
+    setBusy(true);
+    try {
+      await api.put(`/doctor/appointments/${id}/accept`);
+      flash('Session confirmed — the client has been notified');
+      loadAppointments();
+    } catch (e: any) { flash(e.message || 'Could not accept', true); }
+    finally { setBusy(false); }
+  };
+
+  /** Declines a request, optionally telling the client why. */
+  const rejectRequest = async (id: string, reason: string) => {
+    setBusy(true);
+    try {
+      await api.put(`/doctor/appointments/${id}/reject`, { reason });
+      flash('Request declined');
+      setRejecting(null);
+      setRejectReason('');
+      loadAppointments();
+    } catch (e: any) { flash(e.message || 'Could not decline', true); }
+    finally { setBusy(false); }
+  };
+
+  /** Generates the AI summary for one session. */
+  const generateSummary = async (id: string) => {
+    setSummaryBusy(true);
+    setSummaryFor(id);
+    try {
+      const res = await api.post(`/doctor/appointments/${id}/summarise`);
+      setSummary(res.data.summary);
+      flash('Session summary generated');
+      loadAppointments();
+    } catch (e: any) {
+      flash(e.message || 'Could not summarise', true);
+      setSummaryFor(null);
+    } finally { setSummaryBusy(false); }
+  };
+
+  /** Ticks a follow-up action off — this is a worklist, not a suggestion. */
+  const toggleAction = async (id: string, index: number) => {
+    try {
+      const res = await api.put(`/doctor/appointments/${id}/actions/${index}`);
+      setSummary(res.data.summary);
+    } catch (e: any) { flash(e.message || 'Could not update', true); }
   };
 
   const downloadSummary = async (id: string) => {
@@ -514,6 +579,88 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
             <Plus size={15} /> New Appointment
           </button>
         </div>
+
+
+        {/* ── Requests waiting on you ── */}
+        {!!requests.length && (
+          <div style={{ background: '#FFF9E6', borderRadius: 18, border: '1px solid #FFE082', padding: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: c.warning, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Clock size={16} color="white" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 700, color: c.textPrimary, margin: 0 }}>
+                  {requests.length} session request{requests.length === 1 ? '' : 's'} waiting on you
+                </p>
+                <p style={{ fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, margin: '2px 0 0' }}>
+                  Nothing is charged to the client until you accept.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {requests.map((r: any) => (
+                <div key={r.id} style={{ background: c.white, borderRadius: 12, padding: '12px 14px', border: `1px solid ${c.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ width: 34, height: 34, borderRadius: '50%', background: `linear-gradient(135deg, ${c.primary}, ${c.lightSage})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 11, flexShrink: 0 }}>
+                      {r.patient.split(' ').map((n: string) => n[0]).join('')}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 140 }}>
+                      <p style={{ fontFamily: 'Inter', fontSize: 13.5, fontWeight: 700, color: c.textPrimary, margin: 0 }}>{r.patient}</p>
+                      <p style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted, margin: '2px 0 0' }}>
+                        {r.date} · {r.time} · {r.mode === 'offline' ? 'In person' : r.type}
+                      </p>
+                      {r.reason && (
+                        <p style={{ fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, margin: '4px 0 0', fontStyle: 'italic' }}>
+                          “{r.reason}”
+                        </p>
+                      )}
+                      {!!(r.documents || []).length && (
+                        <p style={{ fontFamily: 'Inter', fontSize: 11.5, color: c.primary, margin: '4px 0 0' }}>
+                          📎 {r.documents.length} file{r.documents.length === 1 ? '' : 's'} attached
+                        </p>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 7 }}>
+                      <button disabled={busy} onClick={() => acceptRequest(r.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 9, border: 'none', background: c.success, color: 'white', fontFamily: 'Inter', fontSize: 12.5, fontWeight: 700, cursor: busy ? 'wait' : 'pointer' }}>
+                        <Check size={13} /> Accept
+                      </button>
+                      <button disabled={busy} onClick={() => { setRejecting(rejecting === r.id ? null : r.id); setRejectReason(''); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 9, border: `1px solid ${c.error}`, background: 'transparent', color: c.error, fontFamily: 'Inter', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
+                        <X size={13} /> Decline
+                      </button>
+                    </div>
+                  </div>
+
+                  {rejecting === r.id && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${c.border}` }}>
+                      <p style={{ fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, margin: '0 0 6px' }}>
+                        Why? The client will see this — optional, but a reason is kinder than silence.
+                      </p>
+                      <input
+                        value={rejectReason}
+                        onChange={e => setRejectReason(e.target.value)}
+                        placeholder="e.g. Fully booked that morning — try Thursday"
+                        style={{ width: '100%', padding: '9px 11px', borderRadius: 9, border: `1px solid ${c.border}`, fontFamily: 'Inter', fontSize: 13, color: c.textPrimary, background: c.white, outline: 'none', boxSizing: 'border-box' }}
+                      />
+                      <div style={{ display: 'flex', gap: 7, marginTop: 8 }}>
+                        <button disabled={busy} onClick={() => rejectRequest(r.id, rejectReason)}
+                          style={{ padding: '8px 16px', borderRadius: 9, border: 'none', background: c.error, color: 'white', fontFamily: 'Inter', fontSize: 12.5, fontWeight: 700, cursor: busy ? 'wait' : 'pointer' }}>
+                          {busy ? 'Declining…' : 'Confirm decline'}
+                        </button>
+                        <button onClick={() => setRejecting(null)}
+                          style={{ padding: '8px 14px', borderRadius: 9, border: `1px solid ${c.border}`, background: 'transparent', color: c.textSecondary, fontFamily: 'Inter', fontSize: 12.5, cursor: 'pointer' }}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Search & Filter */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -611,15 +758,15 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
                           {appt.status === 'pending' && (
                             <>
                               <button
-                                onClick={(e) => { e.stopPropagation(); updateStatus(appt.id, 'confirmed'); }}
+                                onClick={(e) => { e.stopPropagation(); acceptRequest(appt.id); }}
                                 title="Accept"
                                 style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: '#E8F5E9', color: c.success, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                               >
                                 <Check size={12} />
                               </button>
                               <button
-                                onClick={(e) => { e.stopPropagation(); updateStatus(appt.id, 'rejected'); }}
-                                title="Reject"
+                                onClick={(e) => { e.stopPropagation(); setSelected(appt.id); setRejecting(appt.id); }}
+                                title="Decline"
                                 style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: '#FFEBEE', color: c.error, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                               >
                                 <X size={12} />
@@ -804,10 +951,130 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
                 <span style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 500, color: c.textPrimary }}>{value}</span>
               </div>
             ))}
+            {(selectedAppt as any).reason && (
+              <div>
+                <div style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted, marginBottom: 5 }}>Client's focus</div>
+                <div style={{ fontFamily: 'Inter', fontSize: 13, color: c.textSecondary, lineHeight: 1.5, padding: '9px 11px', background: c.veryLightSage, borderRadius: 9, fontStyle: 'italic' }}>
+                  “{(selectedAppt as any).reason}”
+                </div>
+              </div>
+            )}
+
+            {!!((selectedAppt as any).documents || []).length && (
+              <div>
+                <div style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted, marginBottom: 5 }}>Client attachments</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {(selectedAppt as any).documents.map((d: any) => (
+                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', borderRadius: 8, background: c.background }}>
+                      <Download size={11} color={c.primary} />
+                      <span style={{ fontFamily: 'Inter', fontSize: 12, color: c.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(selectedAppt as any).rejectionReason && (
+              <div>
+                <div style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted, marginBottom: 5 }}>You declined because</div>
+                <div style={{ fontFamily: 'Inter', fontSize: 13, color: c.error, lineHeight: 1.5, padding: '9px 11px', background: '#FFEBEE', borderRadius: 9 }}>
+                  {(selectedAppt as any).rejectionReason}
+                </div>
+              </div>
+            )}
+
             <div>
-              <div style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted, marginBottom: 5 }}>Session Notes</div>
+              <div style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted, marginBottom: 5 }}>Booking</div>
               <div style={{ fontFamily: 'Inter', fontSize: 13, color: c.textSecondary, lineHeight: 1.5, padding: '9px 11px', background: c.background, borderRadius: 9 }}>{selectedAppt.notes}</div>
             </div>
+
+            {/* ── AI session summary ── */}
+            <div style={{ borderTop: `1px solid ${c.border}`, paddingTop: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 700, color: c.textPrimary }}>Session summary</span>
+                <button
+                  onClick={() => generateSummary(selectedAppt.id)}
+                  disabled={summaryBusy}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 8, border: 'none', background: c.primary, color: 'white', fontFamily: 'Inter', fontSize: 11.5, fontWeight: 600, cursor: summaryBusy ? 'wait' : 'pointer' }}>
+                  <Sparkles size={11} /> {summaryBusy && summaryFor === selectedAppt.id ? 'Reading…' : (selectedAppt as any).aiSummary ? 'Regenerate' : 'Generate'}
+                </button>
+              </div>
+
+              {(() => {
+                // Prefer the freshly generated one, else whatever is stored
+                const sum = (summaryFor === selectedAppt.id && summary)
+                  || (selectedAppt as any).aiSummary;
+                if (!sum) {
+                  return (
+                    <p style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted, lineHeight: 1.6, margin: 0 }}>
+                      Built from this session's notes, the client's mood either side of it, and what they asked to work on.
+                    </p>
+                  );
+                }
+                return (
+                  <div>
+                    <div style={{ padding: '11px 12px', borderRadius: 10, background: c.veryLightSage, marginBottom: 10 }}>
+                      <p style={{ fontFamily: 'Inter', fontSize: 12.5, color: c.textSecondary, lineHeight: 1.65, margin: 0, whiteSpace: 'pre-wrap' }}>
+                        {sum.summary}
+                      </p>
+                    </div>
+
+                    {(sum.moodBefore != null || sum.moodAfter != null) && (
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                        {[['Before', sum.moodBefore], ['After', sum.moodAfter]].map(([lab, val]: any) => (
+                          <div key={lab} style={{ flex: 1, padding: '8px 10px', borderRadius: 9, background: c.background, textAlign: 'center' }}>
+                            <div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 800, color: c.primary }}>
+                              {val != null ? `${val}/10` : '—'}
+                            </div>
+                            <div style={{ fontFamily: 'Inter', fontSize: 10.5, color: c.textMuted }}>Mood {lab.toLowerCase()}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {!!sum.actions?.length && (
+                      <>
+                        <p style={{ fontFamily: 'Inter', fontSize: 11.5, fontWeight: 700, color: c.textMuted, textTransform: 'uppercase', letterSpacing: 0.4, margin: '0 0 6px' }}>
+                          Follow-up
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {sum.actions.map((a: any, i: number) => (
+                            <button
+                              key={i}
+                              onClick={() => toggleAction(selectedAppt.id, i)}
+                              style={{
+                                display: 'flex', alignItems: 'flex-start', gap: 8, textAlign: 'left',
+                                padding: '8px 10px', borderRadius: 9, cursor: 'pointer',
+                                border: `1px solid ${a.priority === 'high' && !a.done ? '#FFCDD2' : c.border}`,
+                                background: a.done ? c.background : a.priority === 'high' ? '#FFF5F5' : c.white,
+                                opacity: a.done ? 0.6 : 1,
+                              }}>
+                              <span style={{
+                                width: 15, height: 15, borderRadius: 4, flexShrink: 0, marginTop: 1,
+                                border: `1.5px solid ${a.done ? c.success : c.border}`,
+                                background: a.done ? c.success : 'transparent',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              }}>
+                                {a.done && <Check size={10} color="white" />}
+                              </span>
+                              <span style={{ flex: 1 }}>
+                                <span style={{ display: 'block', fontFamily: 'Inter', fontSize: 12.5, fontWeight: 600, color: c.textPrimary, textDecoration: a.done ? 'line-through' : 'none' }}>
+                                  {a.label}
+                                </span>
+                                <span style={{ display: 'block', fontFamily: 'Inter', fontSize: 11, color: c.textMuted, marginTop: 1 }}>
+                                  {a.reason}
+                                </span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
             {rescheduling === selectedAppt.id && (
               <RescheduleBox
                 appt={selectedAppt}
