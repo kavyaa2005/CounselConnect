@@ -35,7 +35,7 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
 }
 
 export function SettingsPage() {
-  const { c: colors, sh: shadows } = useTheme();
+  const { c: colors, sh: shadows, onToggleDark, darkMode } = useTheme();
   const [activeSection, setActiveSection] = useState('account');
   const [settings, setSettings] = useState({
     emailNotifs: true, pushNotifs: true, smsNotifs: false, sessionReminders: true, aiAlerts: true, paymentAlerts: false,

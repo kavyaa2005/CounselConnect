@@ -7,6 +7,8 @@ import { LoginPage } from './components/pages/LoginPage';
 import { RegisterPage } from './components/pages/RegisterPage';
 import { JoinAsCounselorPage } from './components/pages/JoinAsCounselorPage';
 import { AboutPage } from './components/pages/AboutPage';
+import { EmergencyPage } from './components/pages/EmergencyPage';
+import { SupportPage } from './components/pages/SupportPage';
 import { ResourcesPage } from './components/pages/ResourcesPage';
 import { DashboardLayout } from './components/DashboardLayout';
 import { DashboardHomePage } from './components/pages/DashboardHomePage';
@@ -43,6 +45,9 @@ export const router = createBrowserRouter([
       { path: 'join-as-counselor', Component: JoinAsCounselorPage },
       { path: 'about', Component: AboutPage },
       { path: 'resources', Component: ResourcesPage },
+      // Public on purpose: someone in crisis may be signed out.
+      { path: 'emergency', Component: EmergencyPage },
+      { path: 'help', Component: SupportPage },
       {
         path: 'dashboard',
         Component: DashboardLayout,
@@ -59,6 +64,9 @@ export const router = createBrowserRouter([
           { path: 'appointments', Component: AppointmentsPage },
           { path: 'billing', Component: BillingPage },
           { path: 'feedback', Component: FeedbackPage },
+          { path: 'emergency', Component: EmergencyPage },
+          { path: 'resources', Component: ResourcesPage },
+          { path: 'help', Component: SupportPage },
         ],
       },
     ],

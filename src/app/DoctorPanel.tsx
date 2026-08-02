@@ -1,8 +1,9 @@
 // Doctor Panel — same UI as the standalone doctor app, now mounted at /doctor
 // and protected so only accounts with role "doctor" can access it.
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router';
 import { getUser, isLoggedIn } from './lib/auth';
+import { api } from './lib/api';
 import { Sidebar } from './components/doctor/Sidebar';
 import { TopNav } from './components/doctor/TopNav';
 import { DashboardPage } from './components/doctor/dashboard/DashboardPage';
@@ -37,6 +38,23 @@ type Page =
 export function DoctorPanel() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [darkMode, setDarkMode] = useState(false);
+
+  // The Settings page has always had a Dark Mode toggle, but the panel kept
+  // its own local state and never read it back — so the saved preference did
+  // nothing and reset on every reload. Load it, and write it on change.
+  useEffect(() => {
+    api.get('/doctor/settings')
+      .then(r => setDarkMode(!!r.data.settings?.darkMode))
+      .catch(() => {});
+  }, []);
+
+  const toggleDark = () => {
+    setDarkMode(prev => {
+      const next = !prev;
+      api.put('/doctor/settings', { darkMode: next }).catch(() => {});
+      return next;
+    });
+  };
 
   // ── Route guard: doctors only ──
   const user = getUser();
@@ -84,7 +102,7 @@ export function DoctorPanel() {
   };
 
   return (
-    <ThemeProvider darkMode={darkMode} onToggleDark={() => setDarkMode(!darkMode)}>
+    <ThemeProvider darkMode={darkMode} onToggleDark={toggleDark}>
       <div
         className={darkMode ? 'dark theme-transition' : 'theme-transition'}
         style={{

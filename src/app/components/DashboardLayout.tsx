@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard, User, Brain, Calendar, Activity, MessageCircle,
   Video, Sparkles, Star, Settings, LogOut, ChevronRight, CreditCard,
-  Menu, X, BookOpen
+  Menu, X, BookOpen, LifeBuoy, ShieldAlert
 } from 'lucide-react';
 import { CC } from '../lib/colors';
 import { useAuth } from '../context/AuthContext';
@@ -46,6 +46,8 @@ const sidebarGroups = [
     items: [
       { icon: CreditCard, label: 'Payments', path: '/dashboard/billing' },
       { icon: Star, label: 'Feedback', path: '/dashboard/feedback' },
+      { icon: BookOpen, label: 'Resources', path: '/dashboard/resources' },
+      { icon: LifeBuoy, label: 'Help', path: '/dashboard/help' },
       { icon: User, label: 'Profile', path: '/dashboard/settings?tab=profile' },
       { icon: Settings, label: 'Settings', path: '/dashboard/settings?tab=notifications' },
     ],
@@ -209,6 +211,28 @@ export function DashboardLayout() {
           <div className="w-full h-1 rounded-full mb-3 overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}>
             <div style={{ width: '82%', height: '100%', background: `linear-gradient(90deg, ${CC.forestSage}, ${CC.terracotta})`, borderRadius: 4 }} />
           </div>
+
+          {/* Crisis support — pinned, not buried in a menu.
+              Someone who needs this should never have to go looking for it. */}
+          <Link
+            to="/dashboard/emergency"
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl mb-2"
+            style={{
+              backgroundColor: 'rgba(217,119,87,0.12)',
+              border: `1px solid ${CC.terracotta}55`,
+              textDecoration: 'none',
+            }}
+          >
+            <ShieldAlert size={15} color={CC.terracotta} style={{ flexShrink: 0 }} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ color: CC.terracotta, fontSize: '0.8rem', fontWeight: 700, lineHeight: 1.3 }}>
+                Need help now?
+              </div>
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.68rem' }}>
+                Crisis lines &amp; support
+              </div>
+            </div>
+          </Link>
 
           {/* Sign out */}
           <button

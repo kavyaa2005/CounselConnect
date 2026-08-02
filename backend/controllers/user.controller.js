@@ -48,4 +48,15 @@ const deleteAccount = (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getProfile, updateProfile, uploadPhoto, updateNotifications, updatePrivacy, deleteAccount };
+
+const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    await require('../services/auth.service').changePassword(req.user.id, 'user', currentPassword, newPassword);
+    return success(res, {}, 'Password changed successfully');
+  } catch (err) { next(err); }
+};
+
+module.exports = { getProfile, updateProfile, uploadPhoto, updateNotifications, updatePrivacy, deleteAccount,
+  changePassword,
+};

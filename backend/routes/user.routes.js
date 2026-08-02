@@ -27,6 +27,7 @@ router.put('/profile', ctrl.updateProfile);
 router.post('/profile/photo', upload.single('photo'), ctrl.uploadPhoto);
 router.put('/settings/notifications', ctrl.updateNotifications);
 router.put('/settings/privacy', ctrl.updatePrivacy);
+router.put('/password', ctrl.changePassword);
 router.delete('/account', ctrl.deleteAccount);
 
 module.exports = router;
