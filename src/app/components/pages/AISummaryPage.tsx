@@ -9,7 +9,44 @@ import {
 import { CC } from '../../lib/colors';
 
 // Fallback skeleton data (null values = no line drawn until real data loads)
-const FALLBACK_MOOD_HISTORY = Array.from({ length: 8 }, (_, i) => ({ week: `Wk ${i + 1}`, mood: null }));
+// Real week labels even before the API responds, so the axis never shows
+// placeholder "Wk 1…8" text that looks like wrong dates.
+const FALLBACK_MOOD_HISTORY = Array.from({ length: 8 }, (_, i) => {
+  const end = new Date();
+  end.setDate(end.getDate() - (7 - i) * 7);
+  const start = new Date(end);
+  start.setDate(end.getDate() - 6);
+  const o: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  return {
+    week: i === 7 ? 'This week' : start.toLocaleDateString('en-US', o),
+    rangeLabel: `${start.toLocaleDateString('en-US', o)} – ${end.toLocaleDateString('en-US', o)}`,
+    entries: 0,
+    mood: null,
+  };
+});
+
+/** Shows the exact date range behind each point — the axis alone was ambiguous. */
+function MoodWeekTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div style={{
+      backgroundColor: CC.lightIvory, border: `1px solid ${CC.softSage}`,
+      borderRadius: 12, padding: '10px 14px', fontSize: '0.82rem',
+      boxShadow: '0 4px 16px rgba(53,92,77,0.12)',
+    }}>
+      <div style={{ color: CC.mutedOlive, fontSize: '0.75rem' }}>{d.rangeLabel || d.week}</div>
+      <div style={{ color: CC.primaryText, fontWeight: 700, marginTop: 3 }}>
+        {d.mood !== null ? `Mood ${d.mood}%` : 'No entries this week'}
+      </div>
+      {d.entries > 0 && (
+        <div style={{ color: CC.mutedOlive, fontSize: '0.74rem', marginTop: 2 }}>
+          {d.entries} {d.entries === 1 ? 'entry' : 'entries'} logged
+        </div>
+      )}
+    </div>
+  );
+}
 const FALLBACK_GROWTH_DATA = [
   { area: 'Anxiety', before: 0, after: 0 }, { area: 'Confidence', before: 0, after: 0 },
   { area: 'Sleep', before: 0, after: 0 },   { area: 'Focus', before: 0, after: 0 },
@@ -144,19 +181,27 @@ export function AISummaryPage() {
             style={{ backgroundColor: CC.lightIvory, boxShadow: '0 4px 24px rgba(53,92,77,0.06)' }}
           >
             <h2 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, color: CC.primaryText, marginBottom: 4 }}>Mood Progress</h2>
-            <p style={{ color: CC.mutedOlive, fontSize: '0.82rem', marginBottom: 16 }}>8-week journey overview</p>
+            <p style={{ color: CC.mutedOlive, fontSize: '0.82rem', marginBottom: 16 }}>
+              Last 8 weeks · each point is that week's average
+            </p>
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={liveMoodHistory}>
+              <LineChart data={liveMoodHistory} margin={{ top: 6, right: 8, left: -14, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={CC.softSage} />
-                <XAxis dataKey="week" tick={{ fill: CC.mutedOlive, fontSize: 11 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="week" tick={{ fill: CC.mutedOlive, fontSize: 10.5 }} axisLine={false} tickLine={false} interval={0} />
                 <YAxis tick={{ fill: CC.mutedOlive, fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: CC.lightIvory, border: `1px solid ${CC.softSage}`, borderRadius: 12, fontSize: '0.82rem' }}
-                  formatter={(v: any) => v !== null ? [v + '%', 'Mood'] : ['No data', 'Mood']}
+                <Tooltip content={<MoodWeekTooltip />} />
+                <Line
+                  type="monotone" dataKey="mood" stroke={CC.forestSage} strokeWidth={3}
+                  dot={{ fill: CC.forestSage, strokeWidth: 0, r: 5 }} activeDot={{ r: 7 }}
+                  connectNulls isAnimationActive={false}
                 />
-                <Line type="monotone" dataKey="mood" stroke={CC.forestSage} strokeWidth={3} dot={{ fill: CC.forestSage, strokeWidth: 0, r: 5 }} activeDot={{ r: 7 }} connectNulls={false} />
               </LineChart>
             </ResponsiveContainer>
+            {liveMoodHistory.every((d: any) => d.mood === null) && (
+              <p style={{ color: CC.mutedOlive, fontSize: '0.8rem', textAlign: 'center', marginTop: -110, marginBottom: 90 }}>
+                No moods logged in the last 8 weeks yet
+              </p>
+            )}
           </motion.div>
 
           {/* Radar chart */}

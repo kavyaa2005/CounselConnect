@@ -21,6 +21,17 @@ const getNotifications = (req, res, next) => {
       .filter(r => r.userId === userId).map(r => r.notifId));
     const items = [];
 
+    // Platform announcements sent by an admin
+    require('../services/admin.service').getBroadcastsFor('user').forEach(b => {
+      items.push({
+        id: `broadcast-${b.id}`,
+        type: b.type === 'warning' ? 'alert' : 'announcement',
+        title: b.title,
+        text: b.message,
+        at: b.createdAt,
+      });
+    });
+
     // Unread counselor messages
     const threads = readStoreObj('messages.json')[userId] || {};
     const doctors = readStore('doctors.json');
@@ -39,13 +50,25 @@ const getNotifications = (req, res, next) => {
 
     // Appointment updates + upcoming sessions
     readStore('appointments.json').filter(a => a.userId === userId).forEach(a => {
+      const byStatus = {
+        pending:   { type: 'request',      title: 'Request sent',
+                     text: `Waiting for ${a.counselorName} to confirm ${a.date} at ${a.time}` },
+        confirmed: { type: 'appointment',  title: 'Session confirmed',
+                     text: `${a.counselorName} accepted — ${a.date} at ${a.time}` },
+        rejected:  { type: 'cancellation', title: 'Request declined',
+                     text: `${a.counselorName} couldn't take ${a.date} at ${a.time}`
+                       + (a.rejectionReason ? ` — "${a.rejectionReason}"` : '. Try another time.') },
+        cancelled: { type: 'cancellation', title: 'Appointment cancelled',
+                     text: `${a.counselorName} — ${a.date} at ${a.time}` },
+        completed: { type: 'appointment',  title: 'Session completed',
+                     text: `${a.counselorName} — ${a.date} at ${a.time}` },
+      };
+      const meta = byStatus[a.status] || byStatus.confirmed;
       items.push({
         id: `appt-${a.id}-${a.status}`,
-        type: 'appointment',
-        title: a.status === 'completed' ? 'Session completed'
-          : a.status === 'cancelled' ? 'Appointment cancelled'
-          : 'Appointment confirmed',
-        text: `${a.counselorName} — ${a.date} at ${a.time}`,
+        type: meta.type,
+        title: meta.title,
+        text: meta.text,
         at: a.updatedAt || a.createdAt,
       });
       if (a.status === 'confirmed' && new Date(a.dateTime) >= new Date()) {

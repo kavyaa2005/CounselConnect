@@ -1,9 +1,11 @@
 import { createBrowserRouter } from 'react-router';
 import { Root } from './Root';
 import { DoctorPanel } from './DoctorPanel';
+import { AdminPanel } from './admin/App';
 import { LandingPage } from './components/pages/LandingPage';
 import { LoginPage } from './components/pages/LoginPage';
 import { RegisterPage } from './components/pages/RegisterPage';
+import { JoinAsCounselorPage } from './components/pages/JoinAsCounselorPage';
 import { AboutPage } from './components/pages/AboutPage';
 import { ResourcesPage } from './components/pages/ResourcesPage';
 import { DashboardLayout } from './components/DashboardLayout';
@@ -17,6 +19,8 @@ import { AISummaryPage } from './components/pages/AISummaryPage';
 import { SettingsPage } from './components/pages/SettingsPage';
 import { FindCounselorPage } from './components/pages/FindCounselorPage';
 import { AppointmentsPage } from './components/pages/AppointmentsPage';
+import { BillingPage } from './components/pages/BillingPage';
+import { FeedbackPage } from './components/pages/FeedbackPage';
 
 export const router = createBrowserRouter([
   {
@@ -25,12 +29,18 @@ export const router = createBrowserRouter([
     Component: DoctorPanel,
   },
   {
+    // Admin panel — its own shell, no public Navbar
+    path: '/admin',
+    Component: AdminPanel,
+  },
+  {
     path: '/',
     Component: Root,
     children: [
       { index: true, Component: LandingPage },
       { path: 'login', Component: LoginPage },
       { path: 'register', Component: RegisterPage },
+      { path: 'join-as-counselor', Component: JoinAsCounselorPage },
       { path: 'about', Component: AboutPage },
       { path: 'resources', Component: ResourcesPage },
       {
@@ -47,6 +57,8 @@ export const router = createBrowserRouter([
           { path: 'settings', Component: SettingsPage },
           { path: 'find-counselor', Component: FindCounselorPage },
           { path: 'appointments', Component: AppointmentsPage },
+          { path: 'billing', Component: BillingPage },
+          { path: 'feedback', Component: FeedbackPage },
         ],
       },
     ],

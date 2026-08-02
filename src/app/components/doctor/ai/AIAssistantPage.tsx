@@ -4,11 +4,18 @@ import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, Area
 import { useTheme } from '../ThemeContext';
 import { api } from '../../../lib/api';
 
-const techniques = [
-  { name: 'Cognitive Restructuring', icon: '🧠', match: 94, desc: 'Highly effective for anxiety management based on patient profile' },
-  { name: 'Mindfulness-Based CBT', icon: '🧘', match: 87, desc: 'Recommended based on previous session outcomes' },
-  { name: '5-4-3-2-1 Grounding', icon: '⚓', match: 82, desc: 'Effective for acute anxiety episodes' },
-  { name: 'Behavioral Activation', icon: '⚡', match: 78, desc: 'Good for building positive routine and combating avoidance' },
+// Technique library, scored per patient rather than fixed. Each entry declares
+// which presenting concerns it suits and the mood band it works best in, so the
+// match percentage moves when you switch patient.
+const TECHNIQUE_LIBRARY = [
+  { name: 'Cognitive Restructuring', icon: '🧠', tags: ['anxiety', 'stress', 'overwhelm', 'depression'], band: [4, 10], desc: 'Challenges the thoughts driving the distress' },
+  { name: 'Mindfulness-Based CBT', icon: '🧘', tags: ['anxiety', 'stress', 'burnout', 'overwhelm'], band: [4, 10], desc: 'Pairs awareness practice with cognitive work' },
+  { name: '5-4-3-2-1 Grounding', icon: '⚓', tags: ['anxiety', 'panic', 'trauma', 'ptsd', 'overwhelm'], band: [0, 6], desc: 'Fast regulation during acute episodes' },
+  { name: 'Behavioural Activation', icon: '⚡', tags: ['depression', 'low', 'burnout', 'grief'], band: [0, 6], desc: 'Rebuilds routine and counters avoidance' },
+  { name: 'Sleep Hygiene Protocol', icon: '🌙', tags: ['insomnia', 'sleep', 'stress', 'burnout'], band: [0, 10], desc: 'Structured wind-down and sleep scheduling' },
+  { name: 'Relapse Prevention Planning', icon: '🛡️', tags: ['addiction', 'depression', 'anxiety'], band: [6, 10], desc: 'Consolidates gains once mood is stable' },
+  { name: 'Exposure Hierarchy', icon: '🪜', tags: ['phobia', 'anxiety', 'ptsd', 'trauma'], band: [5, 10], desc: 'Graded exposure once coping skills are in place' },
+  { name: 'Self-Compassion Practice', icon: '💚', tags: ['self-esteem', 'grief', 'depression', 'burnout'], band: [0, 10], desc: 'Targets harsh self-criticism' },
 ];
 
 export function AIAssistantPage({ onNavigate }: { onNavigate: (page: string) => void }) {
@@ -18,6 +25,7 @@ export function AIAssistantPage({ onNavigate }: { onNavigate: (page: string) => 
   const [detail, setDetail] = useState<any>(null);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ role: string; text: string }[]>([]);
+  const [thinking, setThinking] = useState(false);
 
   // Real patients and their data drive every insight on this page
   useEffect(() => {
@@ -71,22 +79,79 @@ export function AIAssistantPage({ onNavigate }: { onNavigate: (page: string) => 
     return { type: 'low', icon: '🟢', patient: u.name, alert: 'Stable engagement', desc: `${u.moodCount} mood entr${u.moodCount === 1 ? 'y' : 'ies'} logged · avg ${u.avgMood}/10. Recommend positive reinforcement.`, action: 'Add Note' };
   }), [patientList]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    setMessages([...messages, { role: 'user', text: input }]);
-    setInput('');
-    // Assistant reply composed from this patient's real records
-    const moods = detail?.moods || [];
+  // Every answer is composed on the backend from this doctor's real records,
+  // so the reply changes with the question AND with the underlying data.
+  // Header tiles, all derived — these used to be four hardcoded strings.
+  const stats = useMemo(() => {
+    const moods = (detail?.moods || []).map((m: any) => m.value).filter((v: any) => typeof v === 'number');
     const appts = detail?.appointments || [];
-    const reply = current
-      ? `Here's what I see for ${current.name}: ${moods.length} mood entr${moods.length === 1 ? 'y' : 'ies'} logged` +
-        `${current.avgMood != null ? ` with an average of ${current.avgMood}/10` : ''}, ` +
-        `${appts.length} appointment${appts.length === 1 ? '' : 's'} on record ` +
-        `(${appts.filter((a: any) => a.status === 'completed').length} completed). ` +
-        `Primary concern: ${current.reason || 'not specified'}. ` +
-        `${current.avgMood != null && current.avgMood >= 6 ? 'The trend is positive — reinforce current techniques.' : 'Consider scheduling a check-in and reviewing coping strategies.'}`
-      : 'Select a patient to analyze their real session and mood data.';
-    setTimeout(() => setMessages(prev => [...prev, { role: 'ai', text: reply }]), 600);
+    const done = appts.filter((a: any) => a.status === 'completed').length;
+    const avg = current?.avgMood;
+
+    // Trend = second half of the mood history against the first half.
+    let delta: number | null = null;
+    if (moods.length >= 4) {
+      const mid = Math.floor(moods.length / 2);
+      const a = moods.slice(0, mid).reduce((x: number, y: number) => x + y, 0) / mid;
+      const b = moods.slice(mid).reduce((x: number, y: number) => x + y, 0) / (moods.length - mid);
+      delta = Math.round((b - a) * 20) / 10; // on the 0–10 scale
+    }
+
+    const risk = avg == null ? 'Unknown' : avg < 4 ? 'High' : avg < 6 ? 'Moderate' : 'Low';
+    const riskColor = avg == null ? colors.textMuted : avg < 4 ? colors.error : avg < 6 ? colors.warning : colors.success;
+
+    return [
+      {
+        label: 'Mood Score',
+        value: avg != null ? `${avg}/10` : '—',
+        change: delta != null ? `${delta >= 0 ? '+' : ''}${delta}` : `${moods.length} entries`,
+        color: colors.primary,
+      },
+      {
+        label: 'Engagement',
+        value: appts.length ? `${Math.round((done / appts.length) * 100)}%` : '—',
+        change: `${done}/${appts.length} done`,
+        color: colors.success,
+      },
+      { label: 'Risk Level', value: risk, change: avg != null ? `avg ${avg}` : 'no data', color: riskColor },
+      { label: 'Sessions', value: String(appts.length), change: `${done} completed`, color: '#7C6FFF' },
+    ];
+  }, [current, detail, colors]);
+
+  // Techniques ranked against this patient's concern and current mood band.
+  const techniques = useMemo(() => {
+    const focus = String(current?.reason || '').toLowerCase();
+    const avg = current?.avgMood ?? 5;
+    return TECHNIQUE_LIBRARY
+      .map(t => {
+        const tagHit = t.tags.some(tag => focus.includes(tag));
+        const inBand = avg >= t.band[0] && avg <= t.band[1];
+        // Weighted so a concern match matters more than the mood band.
+        const score = 55 + (tagHit ? 28 : 0) + (inBand ? 14 : 0);
+        return {
+          ...t,
+          match: Math.min(97, score),
+          desc: `${t.desc}${tagHit ? ` — matches "${current?.reason}"` : ''}${!inBand ? ' (better suited to a different mood band right now)' : ''}`,
+        };
+      })
+      .sort((a, b) => b.match - a.match)
+      .slice(0, 4);
+  }, [current]);
+
+  const handleSend = async (preset?: string) => {
+    const question = (preset ?? input).trim();
+    if (!question || thinking) return;
+    setMessages(prev => [...prev, { role: 'user', text: question }]);
+    setInput('');
+    setThinking(true);
+    try {
+      const res = await api.post('/doctor/ai/ask', { question, patientId: current?.id });
+      setMessages(prev => [...prev, { role: 'ai', text: res.data.answer }]);
+    } catch (e: any) {
+      setMessages(prev => [...prev, { role: 'ai', text: e.message || 'I could not answer that just now.' }]);
+    } finally {
+      setThinking(false);
+    }
   };
 
   return (
@@ -114,12 +179,7 @@ export function AIAssistantPage({ onNavigate }: { onNavigate: (page: string) => 
             </select>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-            {[
-              { label: 'Mood Score', value: '7.5/10', change: '+0.8', color: colors.primary },
-              { label: 'Recovery Score', value: '78%', change: '+5%', color: colors.success },
-              { label: 'Risk Level', value: 'Low', change: '↓', color: colors.success },
-              { label: 'Sessions', value: '12/15', change: '80%', color: '#7C6FFF' },
-            ].map((stat, i) => (
+            {stats.map((stat, i) => (
               <div key={i} style={{ padding: '12px', borderRadius: 14, background: `${stat.color}08`, border: `1px solid ${stat.color}20`, textAlign: 'center' }}>
                 <div style={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 800, color: stat.color }}>{stat.value}</div>
                 <div style={{ fontFamily: 'Inter', fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{stat.label}</div>
@@ -249,7 +309,7 @@ export function AIAssistantPage({ onNavigate }: { onNavigate: (page: string) => 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ padding: '12px 14px', borderRadius: 14, background: colors.veryLightSage, border: `1px solid ${colors.mintAccent}` }}>
             <p style={{ fontFamily: 'Inter', fontSize: 13, color: colors.textSecondary, margin: 0, lineHeight: 1.5 }}>
-              Hello Dr. Morgan! I'm your AI counseling assistant. I can help you analyze patient data, suggest techniques, generate session notes, and provide risk assessments. What would you like to know?
+              I'm your counseling assistant. I read your real patient records — mood history, sessions, notes and reviews — and answer from them. Ask about a patient by name, your schedule, who's at risk, mood trends, ratings, revenue, or what technique to try next.
             </p>
           </div>
           {messages.map((msg, i) => (
@@ -266,16 +326,24 @@ export function AIAssistantPage({ onNavigate }: { onNavigate: (page: string) => 
               </div>
             </div>
           ))}
+          {thinking && (
+            <div style={{ alignSelf: 'flex-start', padding: '10px 14px', borderRadius: '14px 14px 14px 4px', background: colors.background, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 13, color: colors.textMuted }}>
+              Reading your records…
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <p style={{ fontFamily: 'Inter', fontSize: 12, color: colors.textMuted, margin: 0 }}>Suggested questions:</p>
             {[
-              `Generate session notes for ${patients[0] || 'a patient'}`,
-              'What\'s the burnout risk for my patients?',
-              `Suggest next best action for ${patients[1] || patients[0] || 'a patient'}`,
+              selectedPatient ? `Summarise notes for ${selectedPatient}` : 'Summarise my caseload',
+              'Which patients are at risk?',
+              'What does my schedule look like?',
+              selectedPatient ? `How is ${selectedPatient}'s mood trending?` : 'How are mood trends overall?',
+              'What are my ratings like?',
+              'What technique should I try next?',
             ].map((q, i) => (
               <button
                 key={i}
-                onClick={() => setInput(q)}
+                onClick={() => handleSend(q)}
                 style={{ padding: '8px 12px', borderRadius: 10, border: `1px solid ${colors.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 12, color: colors.textSecondary, cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = colors.primary; (e.currentTarget as HTMLButtonElement).style.color = colors.primary; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = colors.border; (e.currentTarget as HTMLButtonElement).style.color = colors.textSecondary; }}
@@ -291,12 +359,13 @@ export function AIAssistantPage({ onNavigate }: { onNavigate: (page: string) => 
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
-              placeholder="Ask AI assistant..."
+              placeholder={thinking ? 'Thinking…' : 'Ask about a patient, your schedule, risk…'}
               style={{ flex: 1, padding: '10px 14px', borderRadius: 12, border: `1.5px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 13, color: colors.textPrimary, background: colors.background, outline: 'none' }}
             />
             <button
-              onClick={handleSend}
-              style={{ width: 40, height: 40, borderRadius: 12, border: 'none', background: colors.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}
+              onClick={() => handleSend()}
+              disabled={thinking}
+              style={{ width: 40, height: 40, borderRadius: 12, border: 'none', background: colors.primary, cursor: thinking ? 'wait' : 'pointer', opacity: thinking ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}
             >
               <Send size={16} />
             </button>

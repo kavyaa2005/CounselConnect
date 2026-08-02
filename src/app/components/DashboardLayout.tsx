@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router';
+import { Outlet, Link, useLocation, useNavigate, Navigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard, User, Brain, Calendar, Activity, MessageCircle,
-  Video, Sparkles, Star, Settings, LogOut, ChevronRight,
+  Video, Sparkles, Star, Settings, LogOut, ChevronRight, CreditCard,
   Menu, X, BookOpen
 } from 'lucide-react';
 import { CC } from '../lib/colors';
 import { useAuth } from '../context/AuthContext';
+import { isLoggedIn } from '../lib/auth';
+import { IncomingCallRinger } from './IncomingCallRinger';
 
 const sidebarGroups = [
   {
@@ -42,6 +44,8 @@ const sidebarGroups = [
   {
     title: 'Account',
     items: [
+      { icon: CreditCard, label: 'Payments', path: '/dashboard/billing' },
+      { icon: Star, label: 'Feedback', path: '/dashboard/feedback' },
       { icon: User, label: 'Profile', path: '/dashboard/settings?tab=profile' },
       { icon: Settings, label: 'Settings', path: '/dashboard/settings?tab=notifications' },
     ],
@@ -62,18 +66,33 @@ export function DashboardLayout() {
     mainRef.current?.scrollTo({ top: 0, behavior: 'instant' });
   }, [location.pathname]);
 
+  // ── Route guard: signed-in users only; staff go to their own panel ──
+  if (!isLoggedIn() || !user) return <Navigate to="/login" replace />;
+  if (user.role === 'doctor') return <Navigate to="/doctor" replace />;
+  if (user.role === 'admin') return <Navigate to="/admin" replace />;
+
   return (
     <div
       style={{
         display: 'flex',
-        height: 'calc(100vh - 80px)',
-        marginTop: 80,
+        // A padded full-viewport box instead of margin-top: a top margin here
+        // collapses through the Root wrapper and pushes the whole document
+        // down, leaving a strip of empty page at the bottom.
+        height: '100vh',
+        paddingTop: 80,
+        boxSizing: 'border-box',
         backgroundColor: CC.luxuryBg,
         fontFamily: "'Inter', sans-serif",
         overflow: 'hidden',
         position: 'relative',
       }}
     >
+      {/* Ring on any dashboard screen; the video page rings for itself */}
+      <IncomingCallRinger
+        suppressed={location.pathname.startsWith('/dashboard/video')}
+        onAccept={() => navigate('/dashboard/video')}
+      />
+
       {/* ── Mobile overlay ── */}
       <AnimatePresence>
         {mobileSidebarOpen && (
@@ -217,7 +236,9 @@ export function DashboardLayout() {
       </motion.aside>
 
       {/* ── Main content ── */}
-      <main ref={mainRef} className="flex-1 overflow-y-auto main-scroll">
+      {/* Background set here too, so short pages don't leave a pale band */}
+      <main ref={mainRef} className="flex-1 overflow-y-auto main-scroll"
+        style={{ backgroundColor: CC.luxuryBg }}>
         <AnimatePresence>
           <motion.div
             key={location.pathname}

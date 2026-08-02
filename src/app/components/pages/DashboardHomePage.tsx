@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { Calendar, TrendingUp, Sparkles, Clock, ArrowRight, Heart, Brain } from 'lucide-react';
-import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
+import { LineChart, Line, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
 import { CC } from '../../lib/colors';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
@@ -71,6 +71,7 @@ export function DashboardHomePage() {
     api.get('/counselors').then(res => {
       const list = res.data?.counselors || [];
       setRecCounselors(list.slice(0, 2).map((c: any) => ({
+        id: c.id,
         name: c.name,
         specialty: c.specialty,
         avatar: c.image,
@@ -102,6 +103,7 @@ export function DashboardHomePage() {
   // Derived values
   const streak = moodStats?.streak ?? 0;
   const weekAvg = moodStats?.weekAvg ?? 0;
+  const hasMoodData = chartData.some((d: any) => d.value !== null && d.value !== undefined);
   const upcoming = appointments.filter(a => a.status !== 'cancelled').slice(0, 2);
   const nextAppt = upcoming[0];
 
@@ -258,15 +260,37 @@ export function DashboardHomePage() {
                 </div>
               )}
             </div>
-            <ResponsiveContainer width="100%" height={90}>
-              <LineChart data={chartData}>
-                <Line type="monotone" dataKey="value" stroke={CC.terracotta} strokeWidth={2.5} dot={false} connectNulls={false} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: CC.darkForest, border: `1px solid rgba(255,255,255,0.1)`, borderRadius: 10, color: 'white', fontSize: '0.8rem' }}
-                  formatter={(v: any) => v !== null ? [v + '%', 'Mood'] : ['No data', 'Mood']}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {hasMoodData ? (
+              <ResponsiveContainer width="100%" height={90}>
+                <LineChart data={chartData} margin={{ top: 8, bottom: 4, left: 2, right: 2 }}>
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke={CC.terracotta}
+                    strokeWidth={2.5}
+                    /* Dots matter: with a single logged day there is no line to
+                       draw, so without them the chart looked completely empty. */
+                    dot={{ fill: CC.terracotta, stroke: CC.terracotta, r: 3.5 }}
+                    activeDot={{ r: 5.5 }}
+                    connectNulls
+                    isAnimationActive={false}
+                  />
+                  <YAxis hide domain={[0, 100]} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: CC.darkForest, border: `1px solid rgba(255,255,255,0.1)`, borderRadius: 10, color: 'white', fontSize: '0.8rem' }}
+                    labelStyle={{ color: 'rgba(255,255,255,0.6)' }}
+                    formatter={(v: any) => v !== null ? [v + '%', 'Mood'] : ['No entry', 'Mood']}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex flex-col items-center justify-center" style={{ height: 90 }}>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>No mood logged this week</p>
+                <p style={{ color: 'rgba(255,255,255,0.32)', fontSize: '0.72rem', marginTop: 2 }}>
+                  Log today's mood to start your trend
+                </p>
+              </div>
+            )}
             <div className="flex justify-between mt-1">
               {chartData.map((d: any) => (
                 <span key={d.day} style={{ fontSize: '0.7rem', color: CC.mutedOlive }}>{d.day}</span>
@@ -398,8 +422,9 @@ export function DashboardHomePage() {
             <div className="space-y-4">
               {recCounselors.map((c, i) => (
                 <motion.div
-                  key={i}
-                  className="flex items-center gap-3 p-3 rounded-2xl"
+                  key={c.id || i}
+                  onClick={() => navigate(`/dashboard/find-counselor?counselor=${encodeURIComponent(c.id)}`)}
+                  className="flex items-center gap-3 p-3 rounded-2xl cursor-pointer"
                   style={{ border: `1px solid ${CC.softSage}` }}
                   whileHover={{ backgroundColor: `${CC.forestSage}05` }}
                 >

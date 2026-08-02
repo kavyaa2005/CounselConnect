@@ -6,7 +6,7 @@
     "lastName": "Chen",
     "name": "Dr. Sarah Chen",
     "email": "sarah.chen@counselconnect.com",
-    "passwordHash": "$2a$12$xP3LrN1IAOnuWrN/5d1Dr.77miRcy7GJefeBbvFGaU5ICOCNzk51i",
+    "passwordHash": "$2a$12$GTRxkwcRjCcySZepmfudueL809/QaS4gFD/vLLevoYkuzizNVjUuu",
     "role": "doctor",
     "title": "Clinical Psychologist",
     "specialty": "Anxiety & Depression",
@@ -26,7 +26,10 @@
     "badge": "Top Rated",
     "phone": "",
     "createdAt": "2026-07-05T00:00:00.000Z",
-    "updatedAt": "2026-07-05T00:00:00.000Z"
+    "updatedAt": "2026-08-02T10:28:11.051Z",
+    "status": "Verified",
+    "availability": "Mon–Fri",
+    "location": "—"
   },
   {
     "id": "d2",
@@ -35,7 +38,7 @@
     "lastName": "Wells",
     "name": "Dr. Marcus Wells",
     "email": "marcus.wells@counselconnect.com",
-    "passwordHash": "$2a$12$xP3LrN1IAOnuWrN/5d1Dr.77miRcy7GJefeBbvFGaU5ICOCNzk51i",
+    "passwordHash": "$2a$12$wx9WBu/aauwCCYz6/K6xuumCgnjlfYVoeLNU1P7ROBIbKgxXFqpkq",
     "role": "doctor",
     "title": "Trauma Therapist",
     "specialty": "Trauma & PTSD",
@@ -55,7 +58,10 @@
     "badge": "Expert",
     "phone": "",
     "createdAt": "2026-07-05T00:00:00.000Z",
-    "updatedAt": "2026-07-05T00:00:00.000Z"
+    "updatedAt": "2026-08-02T10:28:11.051Z",
+    "status": "Verified",
+    "availability": "Mon–Fri",
+    "location": "—"
   },
   {
     "id": "d3",
@@ -64,11 +70,11 @@
     "lastName": "Osei",
     "name": "Dr. Amara Osei",
     "email": "amara.osei@counselconnect.com",
-    "passwordHash": "$2a$12$xP3LrN1IAOnuWrN/5d1Dr.77miRcy7GJefeBbvFGaU5ICOCNzk51i",
+    "passwordHash": "$2a$12$O3Re4T52d.pFRba/9bFI2ewiXD/fWXswybN2q7le8SZm2YkMqibrK",
     "role": "doctor",
     "title": "Wellness Counselor",
     "specialty": "Stress & Burnout",
-    "rating": 5.0,
+    "rating": 5,
     "sessions": 760,
     "experience": "7 years",
     "languages": [
@@ -84,7 +90,10 @@
     "badge": "New",
     "phone": "",
     "createdAt": "2026-07-05T00:00:00.000Z",
-    "updatedAt": "2026-07-05T00:00:00.000Z"
+    "updatedAt": "2026-08-02T10:28:11.051Z",
+    "status": "Verified",
+    "availability": "Mon–Fri",
+    "location": "—"
   },
   {
     "id": "d4",
@@ -93,7 +102,7 @@
     "lastName": "Park",
     "name": "Dr. Lisa Park",
     "email": "lisa.park@counselconnect.com",
-    "passwordHash": "$2a$12$xP3LrN1IAOnuWrN/5d1Dr.77miRcy7GJefeBbvFGaU5ICOCNzk51i",
+    "passwordHash": "$2a$12$82Uh8bjP.Qq02YE748UMr.YiJCu2sr8dgZn7Vx7Oqc/sNCDTA2FXG",
     "role": "doctor",
     "title": "Relationship Counselor",
     "specialty": "Relationships",
@@ -112,7 +121,10 @@
     "badge": null,
     "phone": "",
     "createdAt": "2026-07-05T00:00:00.000Z",
-    "updatedAt": "2026-07-05T00:00:00.000Z"
+    "updatedAt": "2026-08-02T10:28:11.051Z",
+    "status": "Verified",
+    "availability": "Mon–Fri",
+    "location": "—"
   },
   {
     "id": "d5",
@@ -121,7 +133,7 @@
     "lastName": "Rivera",
     "name": "Dr. James Rivera",
     "email": "james.rivera@counselconnect.com",
-    "passwordHash": "$2a$12$xP3LrN1IAOnuWrN/5d1Dr.77miRcy7GJefeBbvFGaU5ICOCNzk51i",
+    "passwordHash": "$2a$12$OPfoDqOsfj8USjeoKnPNSeEwNHO.HIfAiurbirdU2t79nLuw/17Cy",
     "role": "doctor",
     "title": "Counseling Psychologist",
     "specialty": "Self-esteem",
@@ -141,7 +153,10 @@
     "badge": null,
     "phone": "",
     "createdAt": "2026-07-05T00:00:00.000Z",
-    "updatedAt": "2026-07-05T00:00:00.000Z"
+    "updatedAt": "2026-08-02T10:28:11.051Z",
+    "status": "Verified",
+    "availability": "Mon–Fri",
+    "location": "—"
   },
   {
     "id": "d6",
@@ -150,7 +165,7 @@
     "lastName": "Lin",
     "name": "Dr. Mei Lin",
     "email": "mei.lin@counselconnect.com",
-    "passwordHash": "$2a$12$xP3LrN1IAOnuWrN/5d1Dr.77miRcy7GJefeBbvFGaU5ICOCNzk51i",
+    "passwordHash": "$2a$12$t2isW.FAT.MXjypA6OZ1H.OJjNbEWhH7tdRWjY3eyQpFgO1z/mwzi",
     "role": "doctor",
     "title": "Grief Counselor",
     "specialty": "Grief & Loss",
@@ -171,7 +186,10 @@
     "badge": null,
     "phone": "",
     "createdAt": "2026-07-05T00:00:00.000Z",
-    "updatedAt": "2026-07-05T00:00:00.000Z"
+    "updatedAt": "2026-08-02T10:28:11.051Z",
+    "status": "Verified",
+    "availability": "Mon–Fri",
+    "location": "—"
   },
   {
     "id": "d7",
@@ -180,7 +198,7 @@
     "lastName": "Morgan",
     "name": "Dr. Rachel Morgan",
     "email": "dr.rachel@counselconnect.com",
-    "passwordHash": "$2a$12$xP3LrN1IAOnuWrN/5d1Dr.77miRcy7GJefeBbvFGaU5ICOCNzk51i",
+    "passwordHash": "$2a$12$rnP.ixPlCSXqsEBBW/QYnu.khUJYfqYP3UULO04RipT8AiuGg3Yt.",
     "role": "doctor",
     "title": "Clinical Psychologist",
     "specialty": "Anxiety & Depression",
@@ -199,6 +217,9 @@
     "badge": "Top Rated",
     "phone": "",
     "createdAt": "2026-07-05T00:00:00.000Z",
-    "updatedAt": "2026-07-05T00:00:00.000Z"
+    "updatedAt": "2026-08-02T10:28:11.051Z",
+    "status": "Verified",
+    "availability": "Mon–Fri",
+    "location": "—"
   }
 ]

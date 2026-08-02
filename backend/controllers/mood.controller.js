@@ -30,4 +30,33 @@ const getStats = (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { logMood, getHistory, getStreak, getStats };
+const getFullHistory = (req, res, next) => {
+  try {
+    return success(res, moodService.getFullHistory(req.user.id, {
+      limit: Math.min(200, Number(req.query.limit) || 60),
+      offset: Math.max(0, Number(req.query.offset) || 0),
+    }));
+  } catch (err) { next(err); }
+};
+
+const getReport = (req, res, next) => {
+  try {
+    const period = req.query.period === 'month' ? 'month' : 'week';
+    return success(res, moodService.getReport(req.user.id, period));
+  } catch (err) { next(err); }
+};
+
+/** The same report as a printable PDF. */
+const downloadReport = (req, res, next) => {
+  try {
+    const { readStore } = require('../utils/fileStore.utils');
+    const period = req.query.period === 'month' ? 'month' : 'week';
+    const u = readStore('users.json').find(x => x.id === req.user.id);
+    require('../services/pdf.service').streamMoodReport(res, {
+      client: { name: u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email : 'Client' },
+      report: moodService.getReport(req.user.id, period),
+    });
+  } catch (err) { next(err); }
+};
+
+module.exports = { logMood, getHistory, getStreak, getStats, getFullHistory, getReport, downloadReport };

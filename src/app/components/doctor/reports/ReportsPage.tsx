@@ -16,6 +16,27 @@ export function ReportsPage() {
   const [patients, setPatients] = useState<any[]>([]);
   const [feedback, setFeedback] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
+  const [period, setPeriod] = useState('This Month');
+  const [exporting, setExporting] = useState('');
+  const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
+
+  const flash = (text: string, bad = false) => {
+    setToast({ text, bad });
+    setTimeout(() => setToast(null), 3200);
+  };
+
+  const exportAs = async (fmt: string) => {
+    setExporting(fmt);
+    try {
+      // PDF renders a branded document; Excel and CSV share the CSV writer,
+      // which Excel opens natively.
+      const query = fmt === 'PDF' ? 'pdf' : 'csv';
+      await api.download(`/doctor/reports/export?format=${query}&period=${encodeURIComponent(period)}`);
+      flash(`${fmt} report downloaded`);
+    } catch (e: any) {
+      flash(e.message || `Could not export ${fmt}`, true);
+    } finally { setExporting(''); }
+  };
 
   useEffect(() => {
     api.get('/doctor/analytics').then(res => setAnalytics(res.data.analytics)).catch(() => {});
@@ -61,6 +82,16 @@ export function ReportsPage() {
 
   return (
     <div style={{ padding: '32px', fontFamily: 'Inter', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          padding: '11px 20px', borderRadius: 12, zIndex: 400,
+          background: toast.bad ? '#FFEBEE' : colors.primary,
+          color: toast.bad ? colors.error : 'white',
+          fontFamily: 'Inter', fontSize: 13, fontWeight: 600,
+          boxShadow: '0 8px 28px rgba(0,0,0,0.16)',
+        }}>{toast.text}</div>
+      )}
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
@@ -68,12 +99,19 @@ export function ReportsPage() {
           <p style={{ fontFamily: 'Inter', fontSize: 13, color: colors.textMuted, margin: 0, marginTop: 4 }}>Comprehensive overview of your practice performance</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <select style={{ padding: '9px 16px', borderRadius: 12, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 13, color: colors.textPrimary, background: colors.white, outline: 'none', cursor: 'pointer' }}>
-            {['This Month', 'Last Month', 'Last 3 Months', 'This Year'].map(o => <option key={o}>{o}</option>)}
+          <select
+            value={period}
+            onChange={e => setPeriod(e.target.value)}
+            style={{ padding: '9px 16px', borderRadius: 12, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 13, color: colors.textPrimary, background: colors.white, outline: 'none', cursor: 'pointer' }}>
+            {['This Month', 'Last Month', 'Last 3 Months', 'This Year', 'All Time'].map(o => <option key={o}>{o}</option>)}
           </select>
           {['PDF', 'Excel', 'CSV'].map(fmt => (
-            <button key={fmt} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 12, border: `1px solid ${colors.border}`, background: colors.white, fontFamily: 'Inter', fontSize: 13, color: colors.textSecondary, cursor: 'pointer' }}>
-              <Download size={14} /> {fmt}
+            <button
+              key={fmt}
+              onClick={() => exportAs(fmt)}
+              disabled={!!exporting}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 12, border: `1px solid ${colors.border}`, background: colors.white, fontFamily: 'Inter', fontSize: 13, color: colors.textSecondary, cursor: exporting ? 'wait' : 'pointer', opacity: exporting && exporting !== fmt ? 0.5 : 1 }}>
+              <Download size={14} /> {exporting === fmt ? 'Preparing…' : fmt}
             </button>
           ))}
         </div>
@@ -113,7 +151,9 @@ export function ReportsPage() {
               <h3 style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 700, color: colors.textPrimary, margin: 0 }}>Revenue & Sessions</h3>
               <p style={{ fontFamily: 'Inter', fontSize: 12, color: colors.textMuted, margin: 0, marginTop: 2 }}>Monthly earnings breakdown</p>
             </div>
-            <div style={{ fontFamily: 'Inter', fontSize: 22, fontWeight: 800, color: '#7C6FFF' }}>$45,100</div>
+            <div style={{ fontFamily: 'Inter', fontSize: 22, fontWeight: 800, color: '#7C6FFF' }}>
+              ${revenueMonthly.reduce((sum: number, r: any) => sum + Number(r.revenue || 0), 0).toLocaleString()}
+            </div>
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={revenueMonthly}>
@@ -141,6 +181,9 @@ export function ReportsPage() {
             </PieChart>
           </ResponsiveContainer>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+            {!issueDistribution.length && (
+              <div style={{ fontFamily: 'Inter', fontSize: 12.5, color: colors.textMuted, textAlign: 'center' }}>No patient data yet</div>
+            )}
             {issueDistribution.map((item, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -169,7 +212,8 @@ export function ReportsPage() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={colors.border} vertical={false} />
               <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 10, fill: colors.textMuted }} />
-              <YAxis domain={[160, 260]} axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 10, fill: colors.textMuted }} />
+              {/* auto-scaled: a fixed [160,260] window hid every real value */}
+              <YAxis domain={['auto', 'auto']} allowDecimals={false} axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 10, fill: colors.textMuted }} />
               <Tooltip contentStyle={{ borderRadius: 10, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 11 }} />
               <Area type="monotone" dataKey="patients" stroke={colors.primary} strokeWidth={2} fill="url(#pgGrad)" />
             </AreaChart>
@@ -183,7 +227,7 @@ export function ReportsPage() {
             <LineChart data={recoveryRate}>
               <CartesianGrid strokeDasharray="3 3" stroke={colors.border} vertical={false} />
               <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 10, fill: colors.textMuted }} />
-              <YAxis domain={[60, 80]} axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 10, fill: colors.textMuted }} tickFormatter={v => `${v}%`} />
+              <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 10, fill: colors.textMuted }} tickFormatter={v => `${v}%`} />
               <Tooltip contentStyle={{ borderRadius: 10, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 11 }} formatter={(v: number) => [`${v}%`, 'Recovery Rate']} />
               <Line type="monotone" dataKey="rate" stroke={colors.success} strokeWidth={2.5} dot={{ fill: colors.success, r: 3 }} />
             </LineChart>
@@ -195,11 +239,18 @@ export function ReportsPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <h3 style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 700, color: colors.textPrimary, margin: 0 }}>Patient Ratings</h3>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 800, color: colors.warning }}>4.9</div>
-              <div style={{ fontFamily: 'Inter', fontSize: 11, color: colors.textMuted }}>248 reviews</div>
+              <div style={{ fontFamily: 'Inter', fontSize: 24, fontWeight: 800, color: colors.warning }}>
+                {feedback?.avg != null ? feedback.avg : '—'}
+              </div>
+              <div style={{ fontFamily: 'Inter', fontSize: 11, color: colors.textMuted }}>
+                {feedback?.total || 0} review{feedback?.total === 1 ? '' : 's'}
+              </div>
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {!ratingData.length && (
+              <div style={{ fontFamily: 'Inter', fontSize: 12.5, color: colors.textMuted, padding: '18px 0', textAlign: 'center' }}>No reviews yet</div>
+            )}
             {ratingData.map((r, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontFamily: 'Inter', fontSize: 11, color: colors.textSecondary, width: 44 }}>{r.label}</span>

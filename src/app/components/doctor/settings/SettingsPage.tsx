@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Globe, Bell, Shield, User, Smartphone, Accessibility, Palette, Lock } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Globe, Bell, Shield, User, Smartphone, Accessibility, Palette, Lock, Check } from 'lucide-react';
 import { useTheme } from '../ThemeContext';
+import { api } from '../../../lib/api';
 
 const settingsSections = [
   { id: 'account', label: 'Account', icon: User },
@@ -38,15 +39,95 @@ export function SettingsPage() {
   const [activeSection, setActiveSection] = useState('account');
   const [settings, setSettings] = useState({
     emailNotifs: true, pushNotifs: true, smsNotifs: false, sessionReminders: true, aiAlerts: true, paymentAlerts: false,
-    twoFactor: true, sessionTimeout: true, dataSharing: false, anonymousData: true,
+    twoFactor: false, sessionTimeout: true, dataSharing: false, anonymousData: true,
     darkMode: false, compactView: false, animations: true,
     largeText: false, highContrast: false, screenReader: false,
     autoLogout: true, loginHistory: true,
   });
 
-  const toggle = (key: keyof typeof settings) => {
-    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+  const [profile, setProfile] = useState({ firstName: '', lastName: '', email: '', phone: '' });
+  const [pwd, setPwd] = useState({ current: '', next: '', confirm: '' });
+  const [pwdMsg, setPwdMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [savedTag, setSavedTag] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const flash = (tag: string) => {
+    setSavedTag(tag);
+    setTimeout(() => setSavedTag(null), 2200);
   };
+
+  /* Load real profile + saved preferences */
+  useEffect(() => {
+    api.get('/doctor/profile')
+      .then(r => {
+        const p = r.data.profile || {};
+        setProfile({
+          firstName: p.firstName || '', lastName: p.lastName || '',
+          email: p.email || '', phone: p.phone || '',
+        });
+      })
+      .catch(() => {});
+    api.get('/doctor/settings')
+      .then(r => setSettings(s => ({ ...s, ...r.data.settings })))
+      .catch(() => {});
+  }, []);
+
+  /* Toggling a preference persists it immediately */
+  const toggle = useCallback(async (key: keyof typeof settings) => {
+    const next = { ...settings, [key]: !settings[key] };
+    setSettings(next);
+    try {
+      await api.put('/doctor/settings', { [key]: next[key] });
+      flash('prefs');
+    } catch (e: any) {
+      setSettings(settings);            // roll back on failure
+      setError(e?.message || 'Could not save that preference');
+      setTimeout(() => setError(null), 3000);
+    }
+  }, [settings]);
+
+  async function saveProfile() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.put('/doctor/profile', profile);
+      flash('profile');
+    } catch (e: any) {
+      setError(e?.message || 'Could not save your profile');
+    } finally { setBusy(false); }
+  }
+
+  async function changePassword() {
+    setPwdMsg(null);
+    if (!pwd.current || !pwd.next) {
+      setPwdMsg({ ok: false, text: 'Enter your current and new password' });
+      return;
+    }
+    if (pwd.next !== pwd.confirm) {
+      setPwdMsg({ ok: false, text: "New passwords don't match" });
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.put('/doctor/password', { currentPassword: pwd.current, newPassword: pwd.next });
+      setPwd({ current: '', next: '', confirm: '' });
+      setPwdMsg({ ok: true, text: 'Password updated — use it next time you sign in.' });
+    } catch (e: any) {
+      setPwdMsg({ ok: false, text: e?.message || 'Could not change password' });
+    } finally { setBusy(false); }
+  }
+
+  const SavedTag = ({ tag }: { tag: string }) => (
+    savedTag === tag ? (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 12,
+        fontSize: 13, fontWeight: 600, color: colors.success, fontFamily: 'Inter',
+      }}>
+        <Check size={14} /> Saved
+      </span>
+    ) : null
+  );
 
   const SettingRow = ({ label, desc, settingKey }: { label: string; desc: string; settingKey: keyof typeof settings }) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: `1px solid ${colors.border}` }}>
@@ -95,38 +176,70 @@ export function SettingsPage() {
             <div style={{ background: colors.white, borderRadius: 20, padding: 24, boxShadow: shadows.card, border: `1px solid ${colors.border}`, marginBottom: 20 }}>
               <h4 style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 700, color: colors.textPrimary, margin: 0, marginBottom: 20 }}>Profile Information</h4>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                {[
-                  { label: 'First Name', value: 'Rachel' }, { label: 'Last Name', value: 'Morgan' },
-                  { label: 'Email', value: 'dr.rachel@counselconnect.com' }, { label: 'Phone', value: '+1 234 567 8900' },
-                ].map(field => (
-                  <div key={field.label}>
+                {([
+                  { label: 'First Name', key: 'firstName' as const },
+                  { label: 'Last Name', key: 'lastName' as const },
+                  { label: 'Email', key: 'email' as const },
+                  { label: 'Phone', key: 'phone' as const },
+                ]).map(field => (
+                  <div key={field.key}>
                     <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 12, color: colors.textMuted, marginBottom: 6 }}>{field.label}</label>
-                    <input defaultValue={field.value} style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 14, color: colors.textPrimary, outline: 'none', boxSizing: 'border-box' }} />
+                    <input
+                      value={profile[field.key]}
+                      onChange={e => setProfile(p => ({ ...p, [field.key]: e.target.value }))}
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 14, color: colors.textPrimary, outline: 'none', boxSizing: 'border-box', background: colors.white }} />
                   </div>
                 ))}
               </div>
-              <button style={{ marginTop: 20, padding: '10px 24px', borderRadius: 12, border: 'none', background: colors.primary, color: 'white', fontFamily: 'Inter', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                Save Changes
-              </button>
+              {error && (
+                <p style={{ marginTop: 12, fontSize: 13, color: colors.error, fontFamily: 'Inter' }}>{error}</p>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', marginTop: 20 }}>
+                <button onClick={saveProfile} disabled={busy}
+                  style={{ padding: '10px 24px', borderRadius: 12, border: 'none', background: colors.primary, color: 'white', fontFamily: 'Inter', fontSize: 14, fontWeight: 600, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+                  {busy ? 'Saving…' : 'Save Changes'}
+                </button>
+                <SavedTag tag="profile" />
+              </div>
             </div>
             <div style={{ background: colors.white, borderRadius: 20, padding: 24, boxShadow: shadows.card, border: `1px solid ${colors.border}` }}>
               <h4 style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 700, color: colors.textPrimary, margin: 0, marginBottom: 16 }}>Change Password</h4>
-              {['Current Password', 'New Password', 'Confirm Password'].map(f => (
-                <div key={f} style={{ marginBottom: 14 }}>
-                  <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 12, color: colors.textMuted, marginBottom: 6 }}>{f}</label>
-                  <input type="password" placeholder="••••••••" style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 14, color: colors.textPrimary, outline: 'none', boxSizing: 'border-box' }} />
+              {([
+                { label: 'Current Password', key: 'current' as const },
+                { label: 'New Password', key: 'next' as const },
+                { label: 'Confirm Password', key: 'confirm' as const },
+              ]).map(f => (
+                <div key={f.key} style={{ marginBottom: 14 }}>
+                  <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 12, color: colors.textMuted, marginBottom: 6 }}>{f.label}</label>
+                  <input type="password" placeholder="••••••••"
+                    value={pwd[f.key]}
+                    onChange={e => setPwd(v => ({ ...v, [f.key]: e.target.value }))}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 14, color: colors.textPrimary, outline: 'none', boxSizing: 'border-box', background: colors.white }} />
                 </div>
               ))}
-              <button style={{ padding: '10px 24px', borderRadius: 12, border: 'none', background: colors.primary, color: 'white', fontFamily: 'Inter', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                Update Password
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <button onClick={changePassword} disabled={busy}
+                  style={{ padding: '10px 24px', borderRadius: 12, border: 'none', background: colors.primary, color: 'white', fontFamily: 'Inter', fontSize: 14, fontWeight: 600, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+                  {busy ? 'Updating…' : 'Update Password'}
+                </button>
+                {pwdMsg && (
+                  <span style={{ fontSize: 13, fontWeight: 500, fontFamily: 'Inter', color: pwdMsg.ok ? colors.success : colors.error }}>
+                    {pwdMsg.text}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         )}
 
         {activeSection === 'notifications' && (
           <div style={{ maxWidth: 600 }}>
-            <h3 style={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 700, color: colors.textPrimary, margin: 0, marginBottom: 24 }}>Notification Preferences</h3>
+            <h3 style={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 700, color: colors.textPrimary, margin: 0, marginBottom: 8, display: 'flex', alignItems: 'center' }}>
+              Notification Preferences <SavedTag tag="prefs" />
+            </h3>
+            <p style={{ fontFamily: 'Inter', fontSize: 13, color: colors.textMuted, marginTop: 0, marginBottom: 20 }}>
+              Changes save automatically.
+            </p>
             <div style={{ background: colors.white, borderRadius: 20, padding: 24, boxShadow: shadows.card, border: `1px solid ${colors.border}` }}>
               <SettingRow label="Email Notifications" desc="Receive important updates via email" settingKey="emailNotifs" />
               <SettingRow label="Push Notifications" desc="Browser and mobile app notifications" settingKey="pushNotifs" />

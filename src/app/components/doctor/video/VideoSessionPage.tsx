@@ -46,7 +46,7 @@ export function VideoSessionPage({ onNavigate }: { onNavigate: (page: string) =>
   const [recording, setRecording] = useState(false);
 
   return (
-    <div style={{
+    <div ref={shellRef} style={{
       height: '100%',
       background: '#0F1923',
       display: 'flex',

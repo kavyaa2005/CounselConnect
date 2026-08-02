@@ -12,6 +12,7 @@ import { VideoSessionPage } from './components/doctor/video/VideoSessionPage';
 import { ChatPage } from './components/doctor/chat/ChatPage';
 import { AIAssistantPage } from './components/doctor/ai/AIAssistantPage';
 import { MoodJourneyPage } from './components/doctor/mood/MoodJourneyPage';
+import { PatientJournalsPage } from './components/doctor/journals/PatientJournalsPage';
 import { CounselingNotesPage } from './components/doctor/notes/CounselingNotesPage';
 import { ReportsPage } from './components/doctor/reports/ReportsPage';
 import { AnalyticsPage } from './components/doctor/analytics/AnalyticsPage';
@@ -25,10 +26,11 @@ import { HelpPage } from './components/doctor/help/HelpPage';
 import { SecurityPage } from './components/doctor/security/SecurityPage';
 import { ThemeProvider } from './components/doctor/ThemeContext';
 import { getColors } from './components/doctor/colors';
+import { IncomingCallRinger } from './components/IncomingCallRinger';
 
 type Page =
   | 'dashboard' | 'appointments' | 'patients' | 'video'
-  | 'chat' | 'ai' | 'mood' | 'notes' | 'reports' | 'analytics'
+  | 'chat' | 'ai' | 'mood' | 'journals' | 'notes' | 'reports' | 'analytics'
   | 'availability' | 'feedback' | 'documents' | 'notifications'
   | 'settings' | 'profile' | 'help' | 'security';
 
@@ -39,6 +41,7 @@ export function DoctorPanel() {
   // ── Route guard: doctors only ──
   const user = getUser();
   if (!isLoggedIn() || !user) return <Navigate to="/login" replace />;
+  if (user.role === 'admin') return <Navigate to="/admin" replace />;
   if (user.role !== 'doctor') return <Navigate to="/dashboard" replace />;
 
   const handleNavigate = (page: string) => {
@@ -57,6 +60,7 @@ export function DoctorPanel() {
       case 'chat': return <ChatPage onNavigate={handleNavigate} />;
       case 'ai': return <AIAssistantPage onNavigate={handleNavigate} />;
       case 'mood': return <MoodJourneyPage />;
+      case 'journals': return <PatientJournalsPage />;
       case 'notes': return <CounselingNotesPage />;
       case 'reports': return <ReportsPage />;
       case 'analytics': return <AnalyticsPage />;
@@ -91,6 +95,13 @@ export function DoctorPanel() {
           overflow: 'hidden',
         }}
       >
+        {/* Ring on any screen; the video page handles its own ringing */}
+        <IncomingCallRinger
+          suppressed={isVideoPage}
+          theme={darkMode ? 'dark' : 'light'}
+          onAccept={() => setCurrentPage('video')}
+        />
+
         {/* Sidebar — hidden during video session */}
         {!isVideoPage && (
           <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />

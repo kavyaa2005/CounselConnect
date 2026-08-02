@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, Plus, Phone, Mail, FileText, ChevronRight, X } from 'lucide-react';
+import { Search, Filter, Plus, Phone, Mail, FileText, X, BookOpen, Lock } from 'lucide-react';
 import { useTheme } from '../ThemeContext';
 import { api } from '../../../lib/api';
 
@@ -83,6 +83,20 @@ export function PatientsPage({ onNavigate }: { onNavigate: (page: string) => voi
     api.get(`/doctor/patients/${selected}`).then(res => setDetail(res.data.patient)).catch(() => {});
   }, [selected]);
 
+  // Shared journal entries for the Journal tab
+  const [journal, setJournal] = useState<any | null>(null);
+  const [journalLoading, setJournalLoading] = useState(false);
+  useEffect(() => {
+    if (!selected) { setJournal(null); return; }
+    let cancelled = false;
+    setJournalLoading(true);
+    api.get(`/doctor/journals/${selected}`)
+      .then(res => { if (!cancelled) setJournal(res.data); })
+      .catch(() => { if (!cancelled) setJournal(null); })
+      .finally(() => { if (!cancelled) setJournalLoading(false); });
+    return () => { cancelled = true; };
+  }, [selected]);
+
   const moodHistory = (detail?.moods || []).slice(-7).map((m: any) => ({
     date: new Date(m.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     score: m.value * 2,
@@ -148,7 +162,7 @@ export function PatientsPage({ onNavigate }: { onNavigate: (page: string) => voi
               </colgroup>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${c.border}`, background: c.background }}>
-                  {['Patient', 'Issue', 'Sessions', 'Last Visit', 'Next Appt', 'Progress', 'Risk', ''].map(h => (
+                  {['Patient', 'Issue', 'Sessions', 'Last Visit', 'Next Appt', 'Progress', 'Risk'].map(h => (
                     <th key={h} style={{ padding: '13px 14px', textAlign: 'left', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, color: c.textMuted, whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
@@ -187,9 +201,6 @@ export function PatientsPage({ onNavigate }: { onNavigate: (page: string) => voi
                     </td>
                     <td style={{ padding: '13px 14px', minWidth: 90 }}>
                       <RiskBadge level={p.riskLevel} />
-                    </td>
-                    <td style={{ padding: '13px 14px' }}>
-                      <ChevronRight size={15} color={c.textMuted} />
                     </td>
                   </tr>
                 ))}
@@ -273,7 +284,7 @@ export function PatientsPage({ onNavigate }: { onNavigate: (page: string) => voi
 
           {/* Tabs */}
           <div style={{ display: 'flex', gap: 3, marginBottom: 18, background: c.background, borderRadius: 9, padding: 3 }}>
-            {['overview', 'notes', 'history'].map(tab => (
+            {['overview', 'journal', 'notes', 'history'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -319,6 +330,74 @@ export function PatientsPage({ onNavigate }: { onNavigate: (page: string) => voi
                 <button style={{ flex: 1, padding: '8px', borderRadius: 10, border: `1px solid ${c.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, cursor: 'pointer' }}>Upload File</button>
                 <button style={{ flex: 1, padding: '8px', borderRadius: 10, border: `1px solid ${c.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, cursor: 'pointer' }}>View History</button>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'journal' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {journalLoading && (
+                <p style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted, margin: 0 }}>Loading journal…</p>
+              )}
+
+              {!journalLoading && journal && (
+                <>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ flex: 1, padding: 10, borderRadius: 10, background: c.background, textAlign: 'center' }}>
+                      <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 700, color: c.primary }}>{journal.sharedCount}</div>
+                      <div style={{ fontFamily: 'Inter', fontSize: 10, color: c.textMuted }}>Shared</div>
+                    </div>
+                    <div style={{ flex: 1, padding: 10, borderRadius: 10, background: c.background, textAlign: 'center' }}>
+                      <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 700, color: c.warning }}>{journal.privateCount}</div>
+                      <div style={{ fontFamily: 'Inter', fontSize: 10, color: c.textMuted }}>Private</div>
+                    </div>
+                    <div style={{ flex: 1, padding: 10, borderRadius: 10, background: c.background, textAlign: 'center' }}>
+                      <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 700, color: c.success }}>{journal.totalWords}</div>
+                      <div style={{ fontFamily: 'Inter', fontSize: 10, color: c.textMuted }}>Words</div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => onNavigate('journals')}
+                    style={{
+                      width: '100%', padding: '9px', borderRadius: 10, border: 'none', background: c.primary,
+                      color: 'white', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    }}>
+                    <BookOpen size={13} /> Open full journal &amp; export PDF
+                  </button>
+
+                  {journal.entries.length === 0 && (
+                    <p style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted, margin: 0 }}>
+                      {journal.privateCount > 0
+                        ? 'All entries are marked private by this patient.'
+                        : 'This patient has not written any journal entries yet.'}
+                    </p>
+                  )}
+
+                  {journal.entries.slice(0, 4).map((e: any) => (
+                    <div key={e.id} style={{ padding: '11px', borderRadius: 10, background: c.background, border: `1px solid ${c.border}` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 8 }}>
+                        <span style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 600, color: c.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {e.moodEmoji} {e.title || 'Untitled'}
+                        </span>
+                        <span style={{ fontFamily: 'Inter', fontSize: 10, color: c.textMuted, flexShrink: 0 }}>
+                          {new Date(e.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                      </div>
+                      <p style={{
+                        fontFamily: 'Inter', fontSize: 11.5, color: c.textSecondary, margin: 0, lineHeight: 1.5,
+                        display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                      }}>{e.content}</p>
+                    </div>
+                  ))}
+
+                  {journal.privateCount > 0 && journal.entries.length > 0 && (
+                    <p style={{ fontFamily: 'Inter', fontSize: 10.5, color: c.textMuted, margin: 0, display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Lock size={10} /> {journal.privateCount} private {journal.privateCount === 1 ? 'entry' : 'entries'} hidden
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           )}
 

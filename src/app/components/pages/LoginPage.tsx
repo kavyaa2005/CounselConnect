@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router';
+import { useNavigate, Link, Navigate } from 'react-router';
 import { motion } from 'motion/react';
 import { Eye, EyeOff, Mail, Lock, Heart, ArrowRight, Shield, CheckCircle, Star, Sparkles } from 'lucide-react';
 import { CC } from '../../lib/colors';
 import { useAuth } from '../../context/AuthContext';
 
+// Where each role belongs once authenticated
+const homeFor = (role?: string) =>
+  role === 'admin' ? '/admin' : role === 'doctor' ? '/doctor' : '/dashboard';
+
 export function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ email: '', password: '', remember: false });
@@ -28,14 +32,17 @@ export function LoginPage() {
     setLoading(true);
     try {
       const loggedIn = await login(form.email, form.password);
-      // Role-based redirect: doctors → doctor panel, users → user dashboard
-      navigate(loggedIn.role === 'doctor' ? '/doctor' : '/dashboard');
+      // Role-based redirect — one login page, three destinations
+      navigate(homeFor(loggedIn.role));
     } catch (err: any) {
       setErrors({ password: err.message || 'Invalid email or password' });
     } finally {
       setLoading(false);
     }
   };
+
+  // Already signed in? Skip the form and go straight to the right panel.
+  if (user) return <Navigate to={homeFor(user.role)} replace />;
 
   return (
     <div

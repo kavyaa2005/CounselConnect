@@ -13,3 +13,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .DS_Store
+# Private credential uploads — never commit applicant certificates
+backend/private/
+backend/private/
+backend/uploads/avatars/

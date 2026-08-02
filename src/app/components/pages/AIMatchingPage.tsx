@@ -299,7 +299,7 @@ export function AIMatchingPage() {
             <div className="space-y-5">
               {aiMatches.map((m, i) => (
                 <motion.div
-                  key={m.name}
+                  key={m.id || m.name}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.15 }}
@@ -345,7 +345,7 @@ export function AIMatchingPage() {
                         className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs text-white"
                         style={{ background: `linear-gradient(135deg, ${CC.forestSage}, ${CC.darkForest})`, fontWeight: 600 }}
                         whileHover={{ scale: 1.03 }}
-                        onClick={() => navigate('/dashboard/video')}
+                        onClick={() => navigate(`/dashboard/appointments?counselor=${encodeURIComponent(m.id)}`)}
                       >
                         <Video size={13} /> Book Session
                       </motion.button>
@@ -353,7 +353,7 @@ export function AIMatchingPage() {
                         className="px-4 py-2 rounded-xl text-xs"
                         style={{ backgroundColor: CC.softSage, color: CC.primaryText, fontWeight: 500 }}
                         whileHover={{ scale: 1.03 }}
-                        onClick={() => navigate('/dashboard/find-counselor')}
+                        onClick={() => navigate(`/dashboard/find-counselor?counselor=${encodeURIComponent(m.id)}`)}
                       >
                         View Profile
                       </motion.button>

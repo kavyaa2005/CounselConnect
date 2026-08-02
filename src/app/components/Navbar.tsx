@@ -10,6 +10,7 @@ const navItems = [
   { label: 'About',           path: '/about' },
   { label: 'Resources',       path: '/resources' },
   { label: 'Find Counselor',  path: '/dashboard/find-counselor' },
+  { label: 'Join as Counselor', path: '/join-as-counselor' },
 ];
 
 export function Navbar() {
@@ -18,6 +19,16 @@ export function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+
+  // Each role has its own home; the navbar CTA should honour that.
+  const homePath =
+    user?.role === 'admin' ? '/admin' :
+    user?.role === 'doctor' ? '/doctor' :
+    '/dashboard';
+  const homeLabel =
+    user?.role === 'admin' ? 'Admin Panel' :
+    user?.role === 'doctor' ? 'Doctor Panel' :
+    'Dashboard';
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 60);
@@ -80,7 +91,7 @@ export function Navbar() {
                   Hi, {user.firstName} 👋
                 </span>
                 <motion.button
-                  onClick={() => navigate('/dashboard')}
+                  onClick={() => navigate(homePath)}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm"
                   style={{
                     background: `linear-gradient(135deg, ${CC.forestSage}, ${CC.darkForest})`,
@@ -93,7 +104,7 @@ export function Navbar() {
                   whileHover={{ scale: 1.04, boxShadow: `0 8px 24px rgba(53,92,77,0.35)` }}
                   whileTap={{ scale: 0.97 }}
                 >
-                  <LayoutDashboard size={15} /> Dashboard
+                  <LayoutDashboard size={15} /> {homeLabel}
                 </motion.button>
                 <button
                   onClick={handleLogout}
@@ -182,11 +193,11 @@ export function Navbar() {
                 {user ? (
                   <>
                     <button
-                      onClick={() => { navigate('/dashboard'); setMenuOpen(false); }}
+                      onClick={() => { navigate(homePath); setMenuOpen(false); }}
                       className="flex-1 py-2.5 rounded-full text-sm text-white"
                       style={{ background: `linear-gradient(135deg, ${CC.forestSage}, ${CC.darkForest})`, fontWeight: 600, border: 'none', cursor: 'pointer' }}
                     >
-                      Dashboard
+                      {homeLabel}
                     </button>
                     <button
                       onClick={handleLogout}

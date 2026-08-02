@@ -6,16 +6,22 @@
     "type": "form",
     "size": "154 KB",
     "patientId": null,
-    "uploadedAt": "2026-07-02T09:00:00.000Z"
+    "uploadedAt": "2026-07-02T09:00:00.000Z",
+    "storedName": "seed-doc1.pdf",
+    "mimeType": "application/pdf",
+    "ext": "pdf"
   },
   {
     "id": "doc2",
     "counselorId": "c1",
-    "name": "CBT Worksheet \u2014 Thought Records",
+    "name": "CBT Worksheet — Thought Records",
     "type": "worksheet",
     "size": "188 KB",
     "patientId": null,
-    "uploadedAt": "2026-07-03T09:00:00.000Z"
+    "uploadedAt": "2026-07-03T09:00:00.000Z",
+    "storedName": "seed-doc2.pdf",
+    "mimeType": "application/pdf",
+    "ext": "pdf"
   },
   {
     "id": "doc3",
@@ -24,16 +30,22 @@
     "type": "form",
     "size": "222 KB",
     "patientId": null,
-    "uploadedAt": "2026-07-04T09:00:00.000Z"
+    "uploadedAt": "2026-07-04T09:00:00.000Z",
+    "storedName": "seed-doc3.pdf",
+    "mimeType": "application/pdf",
+    "ext": "pdf"
   },
   {
     "id": "doc4",
     "counselorId": "c7",
-    "name": "CBT Worksheet \u2014 Thought Records",
+    "name": "CBT Worksheet — Thought Records",
     "type": "worksheet",
     "size": "256 KB",
     "patientId": null,
-    "uploadedAt": "2026-07-01T09:00:00.000Z"
+    "uploadedAt": "2026-07-01T09:00:00.000Z",
+    "storedName": "seed-doc4.pdf",
+    "mimeType": "application/pdf",
+    "ext": "pdf"
   },
   {
     "id": "doc5",
@@ -42,7 +54,10 @@
     "type": "form",
     "size": "290 KB",
     "patientId": null,
-    "uploadedAt": "2026-07-02T09:00:00.000Z"
+    "uploadedAt": "2026-07-02T09:00:00.000Z",
+    "storedName": "seed-doc5.pdf",
+    "mimeType": "application/pdf",
+    "ext": "pdf"
   },
   {
     "id": "doc6",
@@ -51,6 +66,9 @@
     "type": "resource",
     "size": "324 KB",
     "patientId": null,
-    "uploadedAt": "2026-07-03T09:00:00.000Z"
+    "uploadedAt": "2026-07-03T09:00:00.000Z",
+    "storedName": "seed-doc6.pdf",
+    "mimeType": "application/pdf",
+    "ext": "pdf"
   }
 ]

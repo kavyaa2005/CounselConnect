@@ -91,8 +91,20 @@ const buildMoodHistory8Weeks = (userMoods) => {
     var mood = week.length > 0
       ? Math.round((week.reduce(function(s, m) { return s + m.value * 20; }, 0) / week.length) * 10) / 10
       : null;
+
+    var isCurrent = i === 7;
+    var opts = { month: 'short', day: 'numeric' };
+
     return {
-      week: weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      // Short axis label; the current bucket is called out so the most recent
+      // point never looks stale
+      week: isCurrent ? 'This week' : weekStart.toLocaleDateString('en-US', opts),
+      // Full window, shown in the tooltip so the label is never ambiguous
+      rangeLabel: weekStart.toLocaleDateString('en-US', opts) + ' – ' + weekEnd.toLocaleDateString('en-US', opts),
+      weekStart: weekStart.toISOString(),
+      weekEnd: weekEnd.toISOString(),
+      entries: week.length,
+      isCurrent: isCurrent,
       mood: mood,
     };
   });

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Filter, Plus, ChevronLeft, ChevronRight, Video, Check, X, Calendar, Clock, MoreVertical, MessageSquare } from 'lucide-react';
+import { Search, Plus, ChevronLeft, ChevronRight, Video, Check, X, Calendar, Clock, MoreVertical, MessageSquare, Download } from 'lucide-react';
 import { useTheme } from '../ThemeContext';
 import { api } from '../../../lib/api';
 
@@ -17,7 +17,6 @@ interface Appointment {
   notes: string;
 }
 
-const calendarDays = Array.from({ length: 31 }, (_, i) => i + 1);
 const SESSION_COLORS = ['#6FAF8F', '#7C6FFF', '#F9A825', '#E91E8C'];
 
 interface ThreeDotsMenuProps {
@@ -81,6 +80,231 @@ function ThreeDotsMenu({ apptId, onAction }: ThreeDotsMenuProps) {
   );
 }
 
+/* ── Reschedule panel ───────────────────────────────────────────────
+   Appointments are stored with human dates ("December 3, 2026") because the
+   patient-facing booking flow writes them that way. The native date input
+   needs ISO, so this converts in both directions.                       */
+function toISO(dateLabel: string, fallback?: string) {
+  const d = new Date(fallback || dateLabel);
+  if (isNaN(d.getTime())) return '';
+  const off = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - off).toISOString().slice(0, 10);
+}
+function fromISO(iso: string) {
+  if (!iso) return '';
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric',
+  });
+}
+
+function RescheduleBox({ appt, busy, onSave, onCancel }: any) {
+  const { c } = useTheme();
+  const [date, setDate] = useState(toISO(appt.date, (appt as any).dateTime));
+  const [time, setTime] = useState(appt.time || '');
+  const [type, setType] = useState(appt.type === 'Chat' ? 'chat' : 'video');
+  const [err, setErr] = useState('');
+
+  const save = () => {
+    if (!date) return setErr('Pick a date');
+    if (!time.trim()) return setErr('Pick a time');
+    const when = new Date(`${fromISO(date)} ${time}`);
+    if (isNaN(when.getTime())) return setErr('That time could not be read — try "2:00 PM"');
+    setErr('');
+    onSave(fromISO(date), time, type);
+  };
+
+  const field: any = {
+    width: '100%', padding: '8px 10px', borderRadius: 9,
+    border: `1px solid ${c.border}`, fontFamily: 'Inter', fontSize: 12.5,
+    color: c.textPrimary, background: c.white, outline: 'none', boxSizing: 'border-box',
+  };
+
+  return (
+    <div style={{ padding: 13, borderRadius: 12, background: c.veryLightSage, border: `1px solid ${c.border}`, display: 'flex', flexDirection: 'column', gap: 9 }}>
+      <div style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 700, color: c.textPrimary }}>Reschedule session</div>
+      <input type="date" value={date} onChange={e => setDate(e.target.value)} style={field} />
+      <input value={time} onChange={e => setTime(e.target.value)} placeholder="2:00 PM" style={field} />
+      <select value={type} onChange={e => setType(e.target.value)} style={{ ...field, cursor: 'pointer' }}>
+        <option value="video">Video session</option>
+        <option value="chat">Chat session</option>
+      </select>
+      {err && <div style={{ fontSize: 11, color: c.error }}>{err}</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
+        <button disabled={busy} onClick={save} style={{ padding: '8px', borderRadius: 9, border: 'none', background: c.primary, color: 'white', fontFamily: 'Inter', fontSize: 12, fontWeight: 700, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.7 : 1 }}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button onClick={onCancel} style={{ padding: '8px', borderRadius: 9, border: `1px solid ${c.border}`, background: 'transparent', color: c.textSecondary, fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── New appointment modal ──────────────────────────────────────────
+   A doctor can only schedule for a patient already related to them, so the
+   picker is populated from /doctor/patients rather than a free-text field. */
+function NewAppointmentModal({ onClose, onCreated }: any) {
+  const { c, sh } = useTheme();
+  const [patients, setPatients] = useState<any[]>([]);
+  const [form, setForm] = useState({ patientId: '', date: '', time: '10:00 AM', sessionType: 'video', price: '', reason: '' });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [serverError, setServerError] = useState('');
+
+  useEffect(() => {
+    api.get('/doctor/patients')
+      .then(r => {
+        const list = r.data.patients || [];
+        setPatients(list);
+        setForm(f => ({ ...f, patientId: f.patientId || list[0]?.id || '' }));
+      })
+      .catch(() => {});
+  }, []);
+
+  const set = (k: string, v: string) => {
+    setForm(f => ({ ...f, [k]: v }));
+    setErrors(e => ({ ...e, [k]: '' }));
+    setServerError('');
+  };
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.patientId) e.patientId = 'Choose a patient';
+    if (!form.date) e.date = 'Pick a date';
+    if (!form.time.trim()) e.time = 'Enter a time';
+    if (form.price && (!Number.isFinite(Number(form.price)) || Number(form.price) < 0)) {
+      e.price = 'Fee must be a number';
+    }
+    if (form.date && form.time) {
+      const when = new Date(`${fromISO(form.date)} ${form.time}`);
+      if (isNaN(when.getTime())) e.time = 'Try a time like "2:00 PM"';
+      else if (when.getTime() < Date.now()) e.date = 'That is in the past';
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const submit = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const res = await api.post('/doctor/appointments', {
+        patientId: form.patientId,
+        date: fromISO(form.date),
+        time: form.time,
+        sessionType: form.sessionType,
+        price: form.price ? Number(form.price) : undefined,
+        reason: form.reason,
+      });
+      onCreated(`Session booked with ${res.data.appointment.patient?.name || 'patient'}`);
+    } catch (err: any) {
+      setServerError(err.message || 'Could not schedule that session');
+    } finally { setSaving(false); }
+  };
+
+  const field = (bad?: string): any => ({
+    width: '100%', padding: '10px 12px', borderRadius: 10,
+    border: `1.5px solid ${bad ? c.error : c.border}`,
+    fontFamily: 'Inter', fontSize: 13, color: c.textPrimary,
+    background: c.white, outline: 'none', boxSizing: 'border-box',
+  });
+  const label = (t: string) => (
+    <div style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 600, color: c.textPrimary, marginBottom: 6 }}>{t}</div>
+  );
+  const err = (m?: string) => m
+    ? <div style={{ fontSize: 11, color: c.error, marginTop: 5 }}>{m}</div>
+    : null;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(20,32,27,0.45)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ width: 460, maxHeight: '88vh', overflowY: 'auto', background: c.white, borderRadius: 20, padding: 26, boxShadow: sh.modal, fontFamily: 'Inter' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <h3 style={{ fontSize: 17, fontWeight: 800, color: c.textPrimary, margin: 0 }}>New Appointment</h3>
+            <p style={{ fontSize: 12, color: c.textMuted, margin: '3px 0 0' }}>Schedule a session with one of your patients</p>
+          </div>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, border: `1px solid ${c.border}`, background: 'transparent', cursor: 'pointer', color: c.textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <X size={14} />
+          </button>
+        </div>
+
+        {!patients.length && (
+          <div style={{ padding: 14, borderRadius: 10, background: c.background, fontSize: 12.5, color: c.textSecondary, lineHeight: 1.6 }}>
+            You have no patients yet. Once someone books with you or starts a conversation, you'll be able to schedule sessions for them here.
+          </div>
+        )}
+
+        {!!patients.length && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+            <div>
+              {label('Patient')}
+              <select value={form.patientId} onChange={e => set('patientId', e.target.value)} style={{ ...field(errors.patientId), cursor: 'pointer' }}>
+                {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              {err(errors.patientId)}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                {label('Date')}
+                <input type="date" value={form.date} onChange={e => set('date', e.target.value)} style={field(errors.date)} />
+                {err(errors.date)}
+              </div>
+              <div>
+                {label('Time')}
+                <input value={form.time} onChange={e => set('time', e.target.value)} placeholder="10:00 AM" style={field(errors.time)} />
+                {err(errors.time)}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                {label('Format')}
+                <select value={form.sessionType} onChange={e => set('sessionType', e.target.value)} style={{ ...field(), cursor: 'pointer' }}>
+                  <option value="video">Video session</option>
+                  <option value="chat">Chat session</option>
+                </select>
+              </div>
+              <div>
+                {label('Fee (optional)')}
+                <input value={form.price} onChange={e => set('price', e.target.value)} placeholder="Your standard rate" style={field(errors.price)} />
+                {err(errors.price)}
+              </div>
+            </div>
+
+            <div>
+              {label('Session focus (optional)')}
+              <input value={form.reason} onChange={e => set('reason', e.target.value)} placeholder="e.g. Review sleep hygiene plan" style={field()} />
+            </div>
+
+            {serverError && (
+              <div style={{ padding: '10px 12px', borderRadius: 10, background: '#FFEBEE', border: '1px solid #FFCDD2', fontSize: 12, color: c.error }}>
+                {serverError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 9, marginTop: 4 }}>
+              <button disabled={saving} onClick={submit} style={{ flex: 1, padding: '11px', borderRadius: 11, border: 'none', background: c.primary, color: 'white', fontFamily: 'Inter', fontSize: 13.5, fontWeight: 700, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+                {saving ? 'Scheduling…' : 'Schedule Session'}
+              </button>
+              <button onClick={onClose} style={{ padding: '11px 20px', borderRadius: 11, border: `1px solid ${c.border}`, background: 'transparent', color: c.textSecondary, fontFamily: 'Inter', fontSize: 13, cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface AppointmentsPageProps {
   onNavigate: (page: string) => void;
 }
@@ -92,6 +316,19 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [selected, setSelected] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [showNew, setShowNew] = useState(false);
+  // First of the month currently on screen, plus the day the user clicked.
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [calDay, setCalDay] = useState<string | null>(null);
+  const [calScope, setCalScope] = useState<'Day' | 'Week' | 'Month'>('Day');
+  const [rescheduling, setRescheduling] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const flash = (text: string, bad = false) => {
+    setToast({ text, bad });
+    setTimeout(() => setToast(null), 3200);
+  };
 
   // Real appointments booked by users, live from the backend
   const loadAppointments = () => {
@@ -118,6 +355,66 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
     }).catch(() => {});
   };
   useEffect(() => { loadAppointments(); }, []);
+
+  const dayKey = (d: Date) => {
+    // Local-date key: toISOString() would shift by the timezone offset and
+    // put late-evening sessions on the wrong day.
+    const off = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - off).toISOString().slice(0, 10);
+  };
+
+  // How many live sessions fall on each date — drives the dots in the grid.
+  const byDay = appointments.reduce((acc: Record<string, number>, a: any) => {
+    if (a.status === 'cancelled' || !a.dateTime) return acc;
+    const k = dayKey(new Date(a.dateTime));
+    acc[k] = (acc[k] || 0) + 1;
+    return acc;
+  }, {});
+
+  const monthLabel = calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const firstWeekday = calMonth.getDay();
+  const daysInMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0).getDate();
+  const todayKey = dayKey(new Date());
+  const shiftMonth = (n: number) => {
+    setCalMonth(m => new Date(m.getFullYear(), m.getMonth() + n, 1));
+    setCalDay(null);
+  };
+
+  // Sessions listed under the grid, scoped to the selected day / its week / the month.
+  const scopedSessions = (() => {
+    const anchorKey = calDay || todayKey;
+    const anchor = new Date(`${anchorKey}T00:00:00`);
+    return appointments
+      .filter((a: any) => a.status !== 'cancelled' && a.dateTime)
+      .filter((a: any) => {
+        const d = new Date(a.dateTime);
+        if (calScope === 'Day') return dayKey(d) === anchorKey;
+        if (calScope === 'Month') {
+          return d.getMonth() === calMonth.getMonth() && d.getFullYear() === calMonth.getFullYear();
+        }
+        const start = new Date(anchor); start.setDate(anchor.getDate() - anchor.getDay());
+        const end = new Date(start); end.setDate(start.getDate() + 7);
+        return d >= start && d < end;
+      })
+      .sort((a: any, b: any) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime())
+      .map((a: any, i: number) => {
+        const d = new Date(a.dateTime);
+        const end = new Date(d.getTime() + 50 * 60000);
+        const fmt = (x: Date) => `${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`;
+        return {
+          id: a.id,
+          time: fmt(d), end: fmt(end),
+          patient: a.patient,
+          date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          status: a.status,
+          color: SESSION_COLORS[i % SESSION_COLORS.length],
+        };
+      });
+  })();
+
+  const scopeLabel = calScope === 'Day'
+    ? (calDay ? new Date(`${calDay}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : "Today's sessions")
+    : calScope === 'Week' ? 'This week' : monthLabel;
 
   const todaySessions = appointments
     .filter((a: any) => a.date === 'Today' && a.status !== 'cancelled')
@@ -153,8 +450,34 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
     api.put(`/doctor/appointments/${id}`, { status: serverStatus }).catch(() => {});
   };
 
+  const downloadSummary = async (id: string) => {
+    try {
+      flash('Preparing summary…');
+      await api.download(`/doctor/appointments/${id}/summary.pdf`);
+      flash('Summary downloaded');
+    } catch (e: any) {
+      flash(e.message || 'Could not generate the summary', true);
+    }
+  };
+
   const handleMenuAction = (action: string, id: string) => {
     if (action === 'cancel') updateStatus(id, 'cancelled');
+    if (action === 'download') downloadSummary(id);
+    // Edit and reschedule open the same panel — the only editable fields on an
+    // appointment are its date, time and format.
+    if (action === 'edit' || action === 'reschedule') { setSelected(id); setRescheduling(id); }
+  };
+
+  const saveReschedule = async (id: string, date: string, time: string, sessionType: string) => {
+    setBusy(true);
+    try {
+      await api.put(`/doctor/appointments/${id}`, { date, time, sessionType });
+      flash('Session rescheduled');
+      setRescheduling(null);
+      loadAppointments();
+    } catch (e: any) {
+      flash(e.message || 'Could not reschedule', true);
+    } finally { setBusy(false); }
   };
 
   return (
@@ -180,12 +503,14 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
               </button>
             ))}
           </div>
-          <button style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '9px 18px', borderRadius: 10, border: 'none',
-            background: c.primary, color: 'white',
-            fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-          }}>
+          <button
+            onClick={() => setShowNew(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '9px 18px', borderRadius: 10, border: 'none',
+              background: c.primary, color: 'white',
+              fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}>
             <Plus size={15} /> New Appointment
           </button>
         </div>
@@ -331,55 +656,89 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
           <div style={{ background: c.white, borderRadius: 18, padding: 22, boxShadow: sh.card, border: `1px solid ${c.border}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${c.border}`, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.textSecondary }}>
+                <button onClick={() => shiftMonth(-1)} title="Previous month" style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${c.border}`, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.textSecondary }}>
                   <ChevronLeft size={15} />
                 </button>
-                <span style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 15, color: c.textPrimary }}>July 2026</span>
-                <button style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${c.border}`, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.textSecondary }}>
+                <span style={{ fontFamily: 'Inter', fontWeight: 700, fontSize: 15, color: c.textPrimary, minWidth: 130, textAlign: 'center' }}>{monthLabel}</span>
+                <button onClick={() => shiftMonth(1)} title="Next month" style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${c.border}`, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.textSecondary }}>
                   <ChevronRight size={15} />
+                </button>
+                <button
+                  onClick={() => { const d = new Date(); setCalMonth(new Date(d.getFullYear(), d.getMonth(), 1)); setCalDay(null); }}
+                  style={{ marginLeft: 4, padding: '5px 12px', borderRadius: 8, border: `1px solid ${c.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, cursor: 'pointer' }}>
+                  Today
                 </button>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
-                {['Day', 'Week', 'Month'].map(v => (
-                  <button key={v} style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${c.border}`, fontFamily: 'Inter', fontSize: 12, cursor: 'pointer', background: v === 'Month' ? c.primary : 'transparent', color: v === 'Month' ? 'white' : c.textSecondary }}>
+                {(['Day', 'Week', 'Month'] as const).map(v => (
+                  <button key={v} onClick={() => setCalScope(v)}
+                    style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${calScope === v ? c.primary : c.border}`, fontFamily: 'Inter', fontSize: 12, cursor: 'pointer', background: calScope === v ? c.primary : 'transparent', color: calScope === v ? 'white' : c.textSecondary }}>
                     {v}
                   </button>
                 ))}
               </div>
             </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
                 <div key={d} style={{ textAlign: 'center', fontFamily: 'Inter', fontSize: 11, fontWeight: 600, color: c.textMuted, padding: '6px 0' }}>{d}</div>
               ))}
-              {Array.from({ length: 2 }, (_, i) => <div key={`empty-${i}`} style={{ height: 70 }} />)}
-              {calendarDays.map(day => {
-                const isToday = day === 2;
-                const hasAppt = [2, 3, 5, 7, 9, 14, 16, 21, 24, 28].includes(day);
+              {/* Blanks so the 1st lands on the right weekday */}
+              {Array.from({ length: firstWeekday }, (_, i) => <div key={`empty-${i}`} style={{ height: 70 }} />)}
+              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+                const key = dayKey(new Date(calMonth.getFullYear(), calMonth.getMonth(), day));
+                const isToday = key === todayKey;
+                const count = byDay[key] || 0;
+                const isSelected = calDay === key;
                 return (
-                  <div key={day} style={{
-                    height: 70, padding: 7, borderRadius: 9,
-                    background: isToday ? c.primary : hasAppt ? c.veryLightSage : 'transparent',
-                    cursor: 'pointer',
-                    border: isToday ? 'none' : `1px solid ${hasAppt ? c.border : 'transparent'}`,
-                  }}>
-                    <div style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: isToday ? 700 : 500, color: isToday ? 'white' : c.textPrimary }}>{day}</div>
-                    {hasAppt && (
-                      <div style={{ marginTop: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <div style={{ height: 3, borderRadius: 2, background: isToday ? 'rgba(255,255,255,0.5)' : c.primary }} />
-                        {day === 2 && <div style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.4)' }} />}
+                  <div
+                    key={day}
+                    onClick={() => { setCalDay(isSelected ? null : key); setCalScope('Day'); }}
+                    title={count ? `${count} session${count === 1 ? '' : 's'}` : 'No sessions'}
+                    style={{
+                      height: 70, padding: 7, borderRadius: 9, cursor: 'pointer',
+                      background: isToday ? c.primary : isSelected ? c.veryLightSage : count ? `${c.primary}0C` : 'transparent',
+                      border: isSelected && !isToday ? `1.5px solid ${c.primary}` : `1px solid ${count || isToday ? c.border : 'transparent'}`,
+                      transition: 'all 0.15s',
+                    }}>
+                    <div style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: isToday || count ? 700 : 500, color: isToday ? 'white' : c.textPrimary }}>{day}</div>
+                    {count > 0 && (
+                      <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {/* One bar per session, capped at three */}
+                        {Array.from({ length: Math.min(count, 3) }, (_, k) => (
+                          <div key={k} style={{ height: 3, borderRadius: 2, background: isToday ? 'rgba(255,255,255,0.6)' : c.primary }} />
+                        ))}
+                        {count > 3 && (
+                          <span style={{ fontSize: 9, color: isToday ? 'rgba(255,255,255,0.8)' : c.textMuted }}>+{count - 3}</span>
+                        )}
                       </div>
                     )}
                   </div>
                 );
               })}
             </div>
+
             <div style={{ marginTop: 18, paddingTop: 18, borderTop: `1px solid ${c.border}` }}>
-              <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 700, color: c.textPrimary, marginBottom: 10 }}>Today's Sessions</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 700, color: c.textPrimary }}>{scopeLabel}</div>
+                <span style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted }}>
+                  {scopedSessions.length} session{scopedSessions.length === 1 ? '' : 's'}
+                </span>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {todaySessions.map((s, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, background: `${s.color}10`, borderLeft: `3px solid ${s.color}` }}>
-                    <div style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 600, color: s.color, width: 80, flexShrink: 0 }}>{s.time}–{s.end}</div>
-                    <div style={{ fontFamily: 'Inter', fontSize: 13, color: c.textPrimary }}>{s.patient}</div>
+                {!scopedSessions.length && (
+                  <div style={{ padding: '20px', textAlign: 'center', fontFamily: 'Inter', fontSize: 13, color: c.textMuted }}>
+                    Nothing booked for this {calScope.toLowerCase()}.
+                  </div>
+                )}
+                {scopedSessions.map((sess: any) => (
+                  <div
+                    key={sess.id}
+                    onClick={() => { setView('list'); setSelected(sess.id); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 10, cursor: 'pointer', background: `${sess.color}10`, borderLeft: `3px solid ${sess.color}` }}>
+                    <div style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 600, color: sess.color, width: 80, flexShrink: 0 }}>{sess.time}–{sess.end}</div>
+                    <div style={{ fontFamily: 'Inter', fontSize: 13, color: c.textPrimary, flex: 1 }}>{sess.patient}</div>
+                    {calScope !== 'Day' && <div style={{ fontFamily: 'Inter', fontSize: 11, color: c.textMuted }}>{sess.date}</div>}
                   </div>
                 ))}
               </div>
@@ -387,6 +746,27 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
           </div>
         )}
       </div>
+
+      {showNew && (
+        <NewAppointmentModal
+          onClose={() => setShowNew(false)}
+          onCreated={(msg: string) => { setShowNew(false); flash(msg); loadAppointments(); }}
+        />
+      )}
+
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          padding: '11px 20px', borderRadius: 12, zIndex: 400,
+          background: toast.bad ? '#FFEBEE' : c.primary,
+          color: toast.bad ? c.error : 'white',
+          border: toast.bad ? `1px solid #FFCDD2` : 'none',
+          fontFamily: 'Inter', fontSize: 13, fontWeight: 600,
+          boxShadow: '0 8px 28px rgba(0,0,0,0.16)',
+        }}>
+          {toast.text}
+        </div>
+      )}
 
       {/* Appointment Detail Drawer */}
       {selectedAppt && (
@@ -428,9 +808,23 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
               <div style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted, marginBottom: 5 }}>Session Notes</div>
               <div style={{ fontFamily: 'Inter', fontSize: 13, color: c.textSecondary, lineHeight: 1.5, padding: '9px 11px', background: c.background, borderRadius: 9 }}>{selectedAppt.notes}</div>
             </div>
+            {rescheduling === selectedAppt.id && (
+              <RescheduleBox
+                appt={selectedAppt}
+                busy={busy}
+                onCancel={() => setRescheduling(null)}
+                onSave={(d: string, t: string, st: string) => saveReschedule(selectedAppt.id, d, t, st)}
+              />
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               <button onClick={() => onNavigate('video')} style={{ width: '100%', padding: '10px', borderRadius: 11, border: 'none', background: c.primary, color: 'white', fontFamily: 'Inter', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
                 Join Video Session
+              </button>
+              <button onClick={() => downloadSummary(selectedAppt.id)} style={{ width: '100%', padding: '9px', borderRadius: 11, border: `1px solid ${c.border}`, background: 'transparent', color: c.textSecondary, fontFamily: 'Inter', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <Download size={13} /> Download Summary (PDF)
+              </button>
+              <button onClick={() => setRescheduling(rescheduling === selectedAppt.id ? null : selectedAppt.id)} style={{ width: '100%', padding: '9px', borderRadius: 11, border: `1px solid ${c.border}`, background: 'transparent', color: c.textSecondary, fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+                {rescheduling === selectedAppt.id ? 'Close reschedule' : 'Reschedule'}
               </button>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
                 <button onClick={() => { if (selected) updateStatus(selected, 'completed'); }} style={{ padding: '8px', borderRadius: 11, border: `1px solid ${c.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, cursor: 'pointer' }}>Mark Complete</button>

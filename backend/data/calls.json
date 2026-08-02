@@ -1,0 +1,30 @@
+[
+  {
+    "id": "f6bdcd4a-06e4-4966-8b89-8ae134aadf8b",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "doctorId": "d1",
+    "counselorId": "c1",
+    "userName": "Farhan",
+    "doctorName": "Dr. Sarah Chen",
+    "initiatedBy": "doctor",
+    "status": "cancelled",
+    "startedAt": null,
+    "endedAt": "2026-07-25T06:17:27.408Z",
+    "durationSec": 0,
+    "createdAt": "2026-07-25T06:17:13.289Z"
+  },
+  {
+    "id": "d82ac443-c19c-4942-89d7-6badf304fff1",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "doctorId": "d1",
+    "counselorId": "c1",
+    "userName": "Farhan",
+    "doctorName": "Dr. Sarah Chen",
+    "initiatedBy": "user",
+    "status": "ended",
+    "startedAt": "2026-07-25T06:17:30.882Z",
+    "endedAt": "2026-07-25T06:17:48.668Z",
+    "durationSec": 18,
+    "createdAt": "2026-07-25T06:17:21.405Z"
+  }
+]

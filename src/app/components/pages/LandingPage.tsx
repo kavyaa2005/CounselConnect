@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { motion, useInView } from 'motion/react';
 import {
   ArrowRight, Star, Heart, Shield, Sparkles, Brain, Calendar,
-  MessageCircle, TrendingUp, CheckCircle, ChevronRight, Play
+  MessageCircle, TrendingUp, CheckCircle, ChevronRight, Play, ShieldCheck
 } from 'lucide-react';
 import { CC } from '../../lib/colors';
 
@@ -656,6 +656,71 @@ export function LandingPage() {
             >
               Begin Your Journey — It's Free
             </motion.button>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ── FOR COUNSELORS ── */}
+      <section className="py-20" style={{ backgroundColor: CC.lightIvory }}>
+        <div className="max-w-5xl mx-auto px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="rounded-3xl overflow-hidden"
+            style={{ border: `1px solid ${CC.softSage}`, backgroundColor: 'white' }}
+          >
+            <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,1fr)' }}>
+              <div style={{ padding: '44px 44px 44px 44px' }}>
+                <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full mb-5"
+                  style={{ backgroundColor: CC.softSage }}>
+                  <ShieldCheck size={13} color={CC.forestSage} />
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: CC.forestSage, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                    For professionals
+                  </span>
+                </span>
+
+                <h2 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 800, fontSize: 'clamp(1.5rem, 3vw, 2.1rem)', color: CC.primaryText, lineHeight: 1.2 }}>
+                  Are you a counselor?
+                </h2>
+                <p style={{ color: CC.mutedOlive, fontSize: '1rem', marginTop: 12, lineHeight: 1.65, maxWidth: 460 }}>
+                  Apply to join our verified network. Upload your degree and certifications, and our team
+                  reviews every application before approval — so clients always know who they're talking to.
+                </p>
+
+                <div className="flex flex-wrap gap-x-6 gap-y-2.5 mt-6">
+                  {['Credential-verified', 'Set your own fee', 'Built-in video sessions'].map(t => (
+                    <div key={t} className="flex items-center gap-2">
+                      <CheckCircle size={14} color={CC.forestSage} />
+                      <span style={{ fontSize: '0.86rem', color: CC.primaryText }}>{t}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <motion.button
+                  onClick={() => window.location.href = '/join-as-counselor'}
+                  className="mt-8 px-7 py-3.5 rounded-full inline-flex items-center gap-2"
+                  style={{
+                    background: `linear-gradient(135deg, ${CC.forestSage}, ${CC.darkForest})`,
+                    color: 'white', fontFamily: "'Inter', sans-serif", fontWeight: 600,
+                    fontSize: '0.95rem', border: 'none', cursor: 'pointer',
+                  }}
+                  whileHover={{ scale: 1.04, boxShadow: '0 14px 34px rgba(53,92,77,0.3)' }}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  Apply to join <ArrowRight size={16} />
+                </motion.button>
+              </div>
+
+              <div className="hidden md:block relative" style={{ backgroundColor: CC.softSage, minHeight: 300 }}>
+                <img
+                  src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=800&q=80"
+                  alt="A counselor at work"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${CC.forestSage}22, transparent)` }} />
+              </div>
+            </div>
           </motion.div>
         </div>
       </section>

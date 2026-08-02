@@ -4,7 +4,7 @@
     "firstName": "Asra",
     "lastName": "",
     "email": "asra@gmail.com",
-    "passwordHash": "$2a$12$hDiFe5hqKz5cumpvNxBH.umfHowaLv0VX.r5PUPTmU6cYkfJefNny",
+    "passwordHash": "$2a$12$W0dENtgYC2nhJVe4ROoURe63yJrWgmAY3t9b4YXd6Bs7zzNtMi9uC",
     "phone": "",
     "bio": "",
     "avatar": "",
@@ -29,14 +29,15 @@
       "profileVisible": true
     },
     "createdAt": "2026-06-29T11:04:29.002Z",
-    "updatedAt": "2026-06-29T11:04:29.002Z"
+    "updatedAt": "2026-08-02T10:28:13.291Z",
+    "status": "Active"
   },
   {
     "id": "2bdb4856-efc3-4611-a968-150841df0f42",
     "firstName": "Farhan",
     "lastName": "",
     "email": "fsargath@gmail.com",
-    "passwordHash": "$2a$12$QP1jlQtQGgb9M/vBgkFXIuBCDJM36d2pw28dJ.nTDBQPsH04fMeFy",
+    "passwordHash": "$2a$12$LrdNvc4V.oO6uH2Ci00SauHgPY9TMry8167mXzP1mQU9lQq8DQyoK",
     "phone": "",
     "bio": "",
     "avatar": "/uploads/avatar-2bdb4856-efc3-4611-a968-150841df0f42-1783229464204.png",
@@ -61,6 +62,39 @@
       "profileVisible": true
     },
     "createdAt": "2026-06-29T11:06:56.170Z",
-    "updatedAt": "2026-07-05T05:31:04.213Z"
+    "updatedAt": "2026-08-02T10:28:13.291Z",
+    "status": "Active"
+  },
+  {
+    "id": "e5cd5145-5e02-40ba-81cc-831b3bcee545",
+    "firstName": "Farhan",
+    "lastName": "",
+    "email": "farhan@gmail.com",
+    "passwordHash": "$2a$12$40OypsGWgEVSL/lZnoUAuu/41MQrsmzyYcW9oUdO6gBZ9nxZeyC8q",
+    "phone": "",
+    "bio": "",
+    "avatar": "",
+    "location": "Bengaluru, IN",
+    "gender": "Male",
+    "age": 22,
+    "status": "Active",
+    "reason": "",
+    "sessionType": "",
+    "frequency": "",
+    "goals": [],
+    "notifications": {
+      "sessions": true,
+      "moodReminders": true,
+      "messages": true,
+      "aiInsights": false,
+      "newsletter": false
+    },
+    "privacy": {
+      "shareProgress": false,
+      "anonymousData": true,
+      "profileVisible": true
+    },
+    "createdAt": "2026-07-25T03:28:48.810Z",
+    "updatedAt": "2026-08-02T10:28:13.291Z"
   }
 ]

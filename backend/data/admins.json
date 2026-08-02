@@ -1,0 +1,38 @@
+[
+  {
+    "id": "a1",
+    "firstName": "Farhan",
+    "lastName": "Sargatha",
+    "name": "Farhan Sargatha",
+    "email": "admin@counselconnect.com",
+    "role": "admin",
+    "title": "Super Admin",
+    "phone": "+91 98765 43210",
+    "bio": "Platform administrator for CounselConnect.",
+    "avatar": "",
+    "timezone": "Asia/Kolkata",
+    "language": "English",
+    "passwordHash": "$2a$12$bJxeE0jKTPqjoQkudRud8uOgL3JipLneVg/tSTPLS4r3QZf40iBES",
+    "status": "Active",
+    "createdAt": "2026-07-25T03:28:46.629Z",
+    "updatedAt": "2026-08-02T10:28:10.335Z"
+  },
+  {
+    "id": "a2",
+    "firstName": "Priya",
+    "lastName": "Nair",
+    "name": "Priya Nair",
+    "email": "moderator@counselconnect.com",
+    "role": "admin",
+    "title": "Moderator",
+    "phone": "+91 98765 11111",
+    "bio": "Reviews counselor applications and flagged conversations.",
+    "avatar": "",
+    "timezone": "Asia/Kolkata",
+    "language": "English",
+    "passwordHash": "$2a$12$MfYO9.WpX3.UtXfQKqS85uWGTSx97G8tPMyaqmQW0LsYR67WXdXVm",
+    "status": "Active",
+    "createdAt": "2026-07-25T03:28:46.629Z",
+    "updatedAt": "2026-08-02T10:28:10.335Z"
+  }
+]

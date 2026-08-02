@@ -1,0 +1,131 @@
+{
+  "general": {
+    "platformName": "CounselConnect",
+    "supportEmail": "support@counselconnect.com",
+    "timezone": "Asia/Kolkata",
+    "language": "English",
+    "maintenanceMode": false
+  },
+  "booking": {
+    "sessionDuration": 50,
+    "bufferMinutes": 10,
+    "maxAdvanceDays": 30,
+    "cancellationWindowHours": 24,
+    "autoConfirm": true
+  },
+  "payments": {
+    "currency": "USD",
+    "platformFeePercent": 20,
+    "payoutSchedule": "Weekly",
+    "refundsEnabled": true
+  },
+  "notifications": {
+    "emailAlerts": true,
+    "sessionReminders": true,
+    "weeklyDigest": true,
+    "marketingEmails": false
+  },
+  "security": {
+    "twoFactor": false,
+    "sessionTimeoutMinutes": 60,
+    "passwordMinLength": 6,
+    "auditLogging": true,
+    "ipWhitelist": false,
+    "strongPassword": true
+  },
+  "organization": {
+    "name": "CounselConnect",
+    "email": "admin@counselconnect.com",
+    "phone": "+91 98765 43210",
+    "timezone": "Asia/Kolkata"
+  },
+  "hours": {
+    "Mon": {
+      "open": true,
+      "from": "08:00",
+      "to": "18:00"
+    },
+    "Tue": {
+      "open": true,
+      "from": "08:00",
+      "to": "18:00"
+    },
+    "Wed": {
+      "open": true,
+      "from": "08:00",
+      "to": "18:00"
+    },
+    "Thu": {
+      "open": true,
+      "from": "08:00",
+      "to": "18:00"
+    },
+    "Fri": {
+      "open": true,
+      "from": "08:00",
+      "to": "17:00"
+    },
+    "Sat": {
+      "open": true,
+      "from": "09:00",
+      "to": "13:00"
+    },
+    "Sun": {
+      "open": false,
+      "from": "09:00",
+      "to": "13:00"
+    }
+  },
+  "adminNotifications": {
+    "newUser": true,
+    "newAppt": true,
+    "payment": true,
+    "counselorVerif": true,
+    "systemAlerts": false,
+    "weeklyReport": true
+  },
+  "roles": [
+    {
+      "name": "Super Admin",
+      "color": "#EF5350",
+      "perms": [
+        "All Access",
+        "Delete Data",
+        "Billing",
+        "API Keys"
+      ],
+      "users": 1
+    },
+    {
+      "name": "Admin",
+      "color": "#5E8B7E",
+      "perms": [
+        "Manage Users",
+        "View Reports",
+        "Settings",
+        "Notifications"
+      ],
+      "users": 1
+    },
+    {
+      "name": "Support",
+      "color": "#42A5F5",
+      "perms": [
+        "View Users",
+        "Manage Tickets",
+        "Send Notifications"
+      ],
+      "users": 0
+    },
+    {
+      "name": "Counselor Manager",
+      "color": "#F59E0B",
+      "perms": [
+        "Manage Counselors",
+        "View Sessions",
+        "Approve Docs"
+      ],
+      "users": 0
+    }
+  ]
+}

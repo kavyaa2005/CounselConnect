@@ -1,19 +1,86 @@
 import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Search, MoreVertical, Phone, Video, Paperclip, Smile, Pin } from 'lucide-react';
+import { Send, Search, MoreVertical, Phone, Video, Paperclip, Smile, Pin, Mic, Square } from 'lucide-react';
 import { CC } from '../../lib/colors';
 import { api } from '../../lib/api';
+import { ChatChannel, VoiceRecorder } from '../../lib/chatClient';
 
 const quickReplies = ["Feeling much better today! 😊", "Can we reschedule?", "I have a question", "Thank you!"];
 
 export function ChatPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Arriving from a counselor's profile ("Send Message") should open THAT thread,
+  // not whichever conversation happens to be first.
+  const requestedId = searchParams.get('counselor');
+
   const [conversations, setConversations] = useState<any[]>([]);
   const [activeCon, setActiveCon] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
   const [search, setSearch] = useState('');
+  const [live, setLive] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recSecs, setRecSecs] = useState(0);
+  const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const chatRef = useRef<ChatChannel | null>(null);
+  const recRef = useRef<VoiceRecorder | null>(null);
+  const recTimer = useRef<any>(null);
+  const activeRef = useRef<any>(null);
+
+  const flash = (text: string, bad = false) => {
+    setToast({ text, bad });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Keep a ref of the open thread so socket handlers (bound once) always see
+  // the current one rather than a stale closure.
+  useEffect(() => { activeRef.current = activeCon; }, [activeCon]);
+
+  const mapMsg = (m: any, con: any) => ({
+    id: m.id,
+    sender: m.isMe ? 'Me' : con?.name,
+    text: m.text,
+    time: m.time,
+    isMe: m.isMe,
+    read: m.read,
+    attachment: m.attachment || null,
+    avatar: con?.avatar,
+  });
+
+  /* ── Live channel ──
+     Messages still persist over REST; the socket just delivers them instantly.
+     Polling below stays as a fallback for when the socket is down.          */
+  useEffect(() => {
+    const ch = new ChatChannel({
+      onMessage: (msg, from) => {
+        const con = activeRef.current;
+        // Only append if the sender is the thread currently on screen
+        if (con && from.role === 'doctor' && msg && con.id) {
+          setMessages(prev => prev.some(x => x.id === msg.id) ? prev : [...prev, mapMsg(msg, con)]);
+        }
+        setConversations(prev => prev.map(c =>
+          c.id === (con?.id) ? { ...c, hasThread: true, lastMsg: msg?.text, time: msg?.time } : c));
+      },
+      onTyping: (from, isTyping) => {
+        const con = activeRef.current;
+        if (con && from.id === con.id) setTyping(isTyping);
+      },
+      onRead: () => {
+        setMessages(prev => prev.map(m => m.isMe ? { ...m, read: true } : m));
+      },
+      onConnectionChange: setLive,
+    });
+    chatRef.current = ch;
+    setLive(ch.live);
+    return () => { ch.destroy(); chatRef.current = null; };
+  }, []);
+
+  const peer = activeCon ? { id: activeCon.id, role: 'doctor' as const } : null;
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
@@ -43,13 +110,32 @@ export function ChatPage() {
           };
         });
         setConversations(list);
-        setActiveCon((prev: any) => prev || list.find((x: any) => x.hasThread) || list[0] || null);
+        setActiveCon((prev: any) => {
+          // A counselor named in the URL always wins on first load
+          if (requestedId) {
+            const wanted = list.find((x: any) => x.id === requestedId);
+            if (wanted && (!prev || prev.id !== wanted.id)) return wanted;
+          }
+          return prev || list.find((x: any) => x.hasThread) || list[0] || null;
+        });
       } catch { /* keep current list */ }
     };
     loadConversations();
     const interval = setInterval(loadConversations, 5000);
     return () => clearInterval(interval);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedId]);
+
+  // Drop the param once it has been applied, otherwise the 5s refresh would
+  // keep yanking the user back to that thread.
+  useEffect(() => {
+    if (requestedId && activeCon?.id === requestedId) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('counselor');
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedId, activeCon]);
 
   // Load message history when conversation changes
   useEffect(() => {
@@ -57,35 +143,106 @@ export function ChatPage() {
     const loadHistory = async () => {
       try {
         const res = await api.get(`/messages/${activeCon.id}`);
-        const serverMsgs = res.data.messages.map((m: any) => ({
-          id: m.id,
-          sender: m.isMe ? 'Me' : activeCon.name,
-          text: m.text,
-          time: m.time,
-          isMe: m.isMe,
-          avatar: activeCon.avatar,
-        }));
-        setMessages(serverMsgs);
+        setMessages(res.data.messages.map((m: any) => mapMsg(m, activeCon)));
       } catch { /* keep current messages */ }
     };
     loadHistory();
-    // Poll so the doctor's replies appear in near real-time
-    const interval = setInterval(loadHistory, 5000);
+    // Opening a thread clears its unread badge for the other side
+    api.post(`/messages/${activeCon.id}/read`).catch(() => {});
+    if (peer) chatRef.current?.markRead(peer);
+    setTyping(false);
+
+    // Fallback poll. Slow while the socket is live (a safety net against a
+    // missed event), brisk when it isn't — that's the old behaviour.
+    const interval = setInterval(loadHistory, live ? 20000 : 5000);
     return () => clearInterval(interval);
-  }, [activeCon?.id]);
+  }, [activeCon?.id, live]);
 
   const sendMessage = async (text?: string) => {
-    const msg = text || input;
-    if (!msg.trim()) return;
+    const msg = (text || input).trim();
+    if (!msg || !activeCon) return;
     const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    const optimistic = { id: Date.now(), sender: 'Me', text: msg, time, isMe: true };
-    setMessages(prev => [...prev, optimistic]);
+    const tempId = `tmp-${Date.now()}`;
+    setMessages(prev => [...prev, { id: tempId, sender: 'Me', text: msg, time, isMe: true, pending: true }]);
     setInput('');
-    try {
-      await api.post('/messages/send', { counselorId: activeCon.id, text: msg });
-      setConversations(prev => prev.map(c => c.id === activeCon.id ? { ...c, hasThread: true, lastMsg: msg, time } : c));
-    } catch { /* message stays optimistic; next poll reconciles */ }
+    if (peer) chatRef.current?.stopTyping(peer);
+
+    // Socket first; REST if the socket didn't take it. Never both — that
+    // would write the message twice.
+    let saved = peer ? await chatRef.current?.send(peer, msg) : null;
+    if (!saved) {
+      try {
+        const res = await api.post('/messages/send', { counselorId: activeCon.id, text: msg });
+        saved = res.data?.sent || res.data?.message || null;
+      } catch {
+        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, failed: true, pending: false } : m));
+        return;
+      }
+    }
+    setMessages(prev => prev.map(m => m.id === tempId
+      ? { ...m, id: saved?.id || m.id, time: saved?.time || m.time, pending: false }
+      : m));
+    setConversations(prev => prev.map(c =>
+      c.id === activeCon.id ? { ...c, hasThread: true, lastMsg: msg, time } : c));
   };
+
+  /* ── attachments ── */
+  const sendFile = async (file: File, kind: 'file' | 'voice' = 'file', duration?: number) => {
+    if (!activeCon) return;
+    if (file.size > 15 * 1024 * 1024) { flash('That file is over the 15 MB limit', true); return; }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('kind', kind);
+      if (duration) fd.append('duration', String(duration));
+      const res = await api.upload(`/messages/${activeCon.id}/attach`, fd);
+      setMessages(prev => [...prev, mapMsg(res.data.message, activeCon)]);
+      setConversations(prev => prev.map(c =>
+        c.id === activeCon.id ? { ...c, hasThread: true, lastMsg: res.data.message.text } : c));
+    } catch (e: any) {
+      flash(e.message || 'Could not send that file', true);
+    } finally { setUploading(false); }
+  };
+
+  /* ── voice notes ── */
+  const toggleRecording = async () => {
+    if (recording) {
+      const rec = recRef.current;
+      setRecording(false);
+      clearInterval(recTimer.current);
+      const out = await rec?.stop();
+      recRef.current = null;
+      setRecSecs(0);
+      if (out && out.duration >= 1) {
+        await sendFile(new File([out.blob], `voice-note.${out.ext}`, { type: out.blob.type }), 'voice', out.duration);
+      }
+      return;
+    }
+    if (!VoiceRecorder.supported) { flash('Voice notes need a modern browser with microphone access', true); return; }
+    try {
+      const rec = new VoiceRecorder();
+      await rec.start();
+      recRef.current = rec;
+      setRecording(true);
+      setRecSecs(0);
+      recTimer.current = setInterval(() => setRecSecs(s => s + 1), 1000);
+    } catch {
+      flash('Microphone access was blocked — allow it in your browser address bar', true);
+    }
+  };
+
+  useEffect(() => () => { clearInterval(recTimer.current); recRef.current?.cancel(); }, []);
+
+  const toastEl = toast && (
+    <div className="fixed bottom-6 left-1/2 px-5 py-3 rounded-2xl z-50"
+      style={{ transform: 'translateX(-50%)',
+               backgroundColor: toast.bad ? 'rgba(217,119,87,0.95)' : CC.forestSage,
+               color: 'white', fontSize: '0.85rem', fontWeight: 600,
+               boxShadow: '0 8px 28px rgba(0,0,0,0.18)' }}>
+      {toast.text}
+    </div>
+  );
 
   if (!activeCon) {
     return <div style={{ height: 'calc(100vh - 80px)', backgroundColor: CC.luxuryBg }} />;
@@ -197,6 +354,7 @@ export function ChatPage() {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {toastEl}
           {messages.map((msg) => (
             <motion.div
               key={msg.id}
@@ -217,9 +375,34 @@ export function ChatPage() {
                     boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
                   }}
                 >
-                  <p style={{ fontSize: '0.88rem', lineHeight: 1.6 }}>{msg.text}</p>
+                  {msg.attachment?.kind === 'voice' ? (
+                    <audio
+                      controls
+                      preload="none"
+                      src={`${(import.meta as any).env.VITE_API_URL || 'http://localhost:5000/api'}/messages/${activeCon.id}/attachments/${msg.attachment.id}`}
+                      style={{ height: 34, maxWidth: 220 }}
+                    />
+                  ) : msg.attachment ? (
+                    <button
+                      onClick={() => api.download(
+                        `/messages/${activeCon.id}/attachments/${msg.attachment.id}`,
+                        msg.attachment.name
+                      ).catch((e: any) => flash(e.message, true))}
+                      className="flex items-center gap-2"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                               color: msg.isMe ? 'white' : CC.primaryText, textAlign: 'left' }}
+                    >
+                      <Paperclip size={14} />
+                      <span style={{ fontSize: '0.85rem', textDecoration: 'underline' }}>{msg.attachment.name}</span>
+                    </button>
+                  ) : (
+                    <p style={{ fontSize: '0.88rem', lineHeight: 1.6 }}>{msg.text}</p>
+                  )}
                 </div>
-                <p style={{ fontSize: '0.7rem', color: CC.mutedOlive }}>{msg.time}</p>
+                <p style={{ fontSize: '0.7rem', color: msg.failed ? CC.terracotta : CC.mutedOlive }}>
+                  {msg.failed ? 'Not sent — tap to retry' : msg.pending ? 'Sending…' : msg.time}
+                  {msg.isMe && !msg.pending && !msg.failed && msg.read ? ' · Read' : ''}
+                </p>
               </div>
             </motion.div>
           ))}
@@ -271,14 +454,16 @@ export function ChatPage() {
           <motion.button
             className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{ backgroundColor: CC.softSage }}
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
             whileHover={{ scale: 1.08 }}
           >
-            <Paperclip size={17} color={CC.mutedOlive} />
+            <Paperclip size={17} color={uploading ? CC.forestSage : CC.mutedOlive} />
           </motion.button>
           <div className="flex-1 relative">
             <textarea
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={e => { setInput(e.target.value); if (peer) chatRef.current?.typing(peer); }}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
               placeholder="Type your message..."
               rows={1}
@@ -295,6 +480,34 @@ export function ChatPage() {
           >
             <Smile size={17} color={CC.mutedOlive} />
           </motion.button>
+          {recording && (
+            <div className="absolute -top-11 left-0 right-0 flex items-center justify-center gap-2 py-2 rounded-2xl"
+              style={{ backgroundColor: CC.terracotta, color: 'white', fontSize: '0.8rem', fontWeight: 600 }}>
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: 'white' }} />
+              Recording {String(Math.floor(recSecs / 60)).padStart(2, '0')}:{String(recSecs % 60).padStart(2, '0')} — tap stop to send
+            </div>
+          )}
+
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) sendFile(f); e.target.value = ''; }}
+          />
+
+          {/* Voice note */}
+          <motion.button
+            onClick={toggleRecording}
+            title={recording ? 'Stop and send' : 'Record a voice note'}
+            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: recording ? CC.terracotta : CC.softSage }}
+            whileHover={{ scale: 1.08 }}
+          >
+            {recording
+              ? <Square size={14} color="white" fill="white" />
+              : <Mic size={17} color={CC.mutedOlive} />}
+          </motion.button>
+
           <motion.button
             onClick={() => sendMessage()}
             className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"

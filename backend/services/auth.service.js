@@ -65,7 +65,17 @@ const findDoctorById = (id) => {
   return doctors.find(d => d.id === id) || null;
 };
 
-// Unified login: checks users first, then doctors. Token carries the role.
+const findAdminByEmail = (email) => {
+  const admins = readStore('admins.json');
+  return admins.find(a => a.email.toLowerCase() === email.toLowerCase()) || null;
+};
+
+const findAdminById = (id) => {
+  const admins = readStore('admins.json');
+  return admins.find(a => a.id === id) || null;
+};
+
+// Unified login: checks users, then doctors, then admins. Token carries the role.
 const loginUser = async (email, password, meta = {}) => {
   let account = findUserByEmail(email);
   let role = 'user';
@@ -76,11 +86,20 @@ const loginUser = async (email, password, meta = {}) => {
   }
 
   if (!account) {
+    account = findAdminByEmail(email);
+    role = 'admin';
+  }
+
+  if (!account) {
     throw Object.assign(new Error('Invalid email or password'), { statusCode: 401 });
   }
   const valid = await comparePassword(password, account.passwordHash);
   if (!valid) {
     throw Object.assign(new Error('Invalid email or password'), { statusCode: 401 });
+  }
+  // Admins can suspend accounts — blocked here at the door.
+  if (account.status === 'Suspended') {
+    throw Object.assign(new Error('This account has been suspended. Please contact support.'), { statusCode: 403 });
   }
   const token = signToken({ id: account.id, email: account.email, role });
   recordLogin(account.id, role, meta);
@@ -118,9 +137,46 @@ const stripSensitive = (user) => {
 };
 
 const getUserById = (id, role = 'user') => {
-  const account = role === 'doctor' ? findDoctorById(id) : findUserById(id);
+  const account =
+    role === 'doctor' ? findDoctorById(id) :
+    role === 'admin'  ? findAdminById(id)  :
+    findUserById(id);
   if (!account) throw Object.assign(new Error('User not found'), { statusCode: 404 });
   return { ...stripSensitive(account), role };
+};
+
+// Update an admin's own profile
+const updateAdminProfile = (id, updates) => {
+  const admins = readStore('admins.json');
+  const idx = admins.findIndex(a => a.id === id);
+  if (idx === -1) throw Object.assign(new Error('Admin not found'), { statusCode: 404 });
+
+  const allowed = ['firstName', 'lastName', 'name', 'email', 'phone', 'bio', 'avatar', 'title', 'timezone', 'language'];
+  allowed.forEach(key => {
+    if (updates[key] !== undefined) admins[idx][key] = updates[key];
+  });
+  admins[idx].updatedAt = new Date().toISOString();
+  writeStore('admins.json', admins);
+  return stripSensitive(admins[idx]);
+};
+
+// Change password for any role
+const changePassword = async (id, role, currentPassword, newPassword) => {
+  const file = role === 'doctor' ? 'doctors.json' : role === 'admin' ? 'admins.json' : 'users.json';
+  const list = readStore(file);
+  const idx = list.findIndex(a => a.id === id);
+  if (idx === -1) throw Object.assign(new Error('Account not found'), { statusCode: 404 });
+
+  const ok = await comparePassword(currentPassword, list[idx].passwordHash);
+  if (!ok) throw Object.assign(new Error('Current password is incorrect'), { statusCode: 400 });
+  if (!newPassword || newPassword.length < 6) {
+    throw Object.assign(new Error('New password must be at least 6 characters'), { statusCode: 400 });
+  }
+
+  list[idx].passwordHash = await hashPassword(newPassword);
+  list[idx].updatedAt = new Date().toISOString();
+  writeStore(file, list);
+  return true;
 };
 
 const updateUserProfile = (id, updates) => {
@@ -166,5 +222,6 @@ const deleteUser = (id) => {
 module.exports = {
   createUser, loginUser, logoutUser, getUserById,
   updateUserProfile, updateNotifications, updatePrivacy, deleteUser,
-  findDoctorById, getLoginHistory,
+  findDoctorById, findAdminById, findAdminByEmail,
+  updateAdminProfile, changePassword, getLoginHistory,
 };

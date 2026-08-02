@@ -10,6 +10,17 @@
         "createdAt": "2026-06-29T11:05:49.019Z",
         "readByDoctor": true
       }
+    ],
+    "c3": [
+      {
+        "id": "0f29f432-1f5d-4a4f-87a2-bb964bcb86db",
+        "text": "Hi Asra, good to have you here. Let me know how you're feeling today.",
+        "time": "11:00 AM",
+        "isMe": false,
+        "read": true,
+        "createdAt": "2026-07-22T05:30:00.000Z",
+        "readByDoctor": true
+      }
     ]
   },
   "2bdb4856-efc3-4611-a968-150841df0f42": {
@@ -58,6 +69,36 @@
         "read": true,
         "readByDoctor": true,
         "createdAt": "2026-07-04T20:07:50.038Z"
+      }
+    ],
+    "c3": [],
+    "c2": [],
+    "c4": [],
+    "c5": [],
+    "c6": [],
+    "c7": []
+  },
+  "e5cd5145-5e02-40ba-81cc-831b3bcee545": {
+    "c1": [
+      {
+        "id": "165fd2c6-540a-4691-bca5-a7c59b2578c8",
+        "text": "Hi Farhan, good to have you here. Let me know how you're feeling today.",
+        "time": "10:00 AM",
+        "isMe": false,
+        "read": true,
+        "createdAt": "2026-07-23T04:30:00.000Z",
+        "readByDoctor": true
+      }
+    ],
+    "c2": [
+      {
+        "id": "eb2e3496-7e67-41ec-90d6-aebee475f08e",
+        "text": "Hi Farhan, good to have you here. Let me know how you're feeling today.",
+        "time": "11:00 AM",
+        "isMe": false,
+        "read": true,
+        "createdAt": "2026-07-22T05:30:00.000Z",
+        "readByDoctor": true
       }
     ]
   }

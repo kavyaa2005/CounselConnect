@@ -48,5 +48,25 @@
     "notes": "",
     "date": "2026-07-10",
     "createdAt": "2026-07-10T13:00:20.272Z"
+  },
+  {
+    "id": "58943607-8f30-40ef-b8ae-b7d8a74106bc",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "value": 3,
+    "label": "Okay",
+    "emoji": "😐",
+    "notes": "",
+    "date": "2026-07-25",
+    "createdAt": "2026-07-25T06:19:35.529Z"
+  },
+  {
+    "id": "a162fe86-67c9-44d8-adab-86e1683905c8",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "value": 5,
+    "label": "Great",
+    "emoji": "😄",
+    "notes": "",
+    "date": "2026-08-02",
+    "createdAt": "2026-08-02T09:49:49.859Z"
   }
 ]

@@ -1,1 +1,84 @@
-[]
+[
+  {
+    "id": "dc7767ad-b7ea-4a4d-b247-be3028b6519f",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "title": "my  day",
+    "content": "i feel so stressed today and it was just a good day nothing excellent about it today",
+    "moodEmoji": "😐",
+    "moodLabel": "Okay",
+    "moodColor": "#8FA89B",
+    "tags": [
+      "stress"
+    ],
+    "date": "2026-07-25",
+    "createdAt": "2026-07-25T04:38:06.090Z",
+    "updatedAt": "2026-07-25T04:38:06.090Z"
+  },
+  {
+    "id": "jcsot4fm",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "title": "Rough morning",
+    "content": "Woke up with that tight feeling in my chest again. Tried the 4-7-8 breathing Dr. Chen suggested and it took the edge off after about ten minutes. Still made it to class, which I am counting as a win.",
+    "moodEmoji": "🙂",
+    "moodLabel": "Okay",
+    "moodColor": "#355C4D",
+    "tags": [
+      "anxiety",
+      "coping"
+    ],
+    "isPrivate": false,
+    "date": "2026-07-20",
+    "createdAt": "2026-07-20T08:17:29.805Z",
+    "updatedAt": "2026-07-20T08:17:29.805Z"
+  },
+  {
+    "id": "jk70jshh",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "title": "Good session",
+    "content": "Talked through the presentation fear today. Realising a lot of it is about being judged rather than the actual speaking part.",
+    "moodEmoji": "🙂",
+    "moodLabel": "Good",
+    "moodColor": "#355C4D",
+    "tags": [
+      "therapy",
+      "insight"
+    ],
+    "isPrivate": false,
+    "date": "2026-07-24",
+    "createdAt": "2026-07-24T08:17:29.805Z",
+    "updatedAt": "2026-07-24T08:17:29.805Z"
+  },
+  {
+    "id": "jr26zf8q",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "title": "Private thoughts",
+    "content": "Something I am not ready to talk about yet.",
+    "moodEmoji": "🙂",
+    "moodLabel": "Low",
+    "moodColor": "#355C4D",
+    "tags": [
+      "personal"
+    ],
+    "isPrivate": true,
+    "date": "2026-07-27",
+    "createdAt": "2026-07-27T08:17:29.805Z",
+    "updatedAt": "2026-07-27T08:17:29.805Z"
+  },
+  {
+    "id": "jzzeuvnc",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "title": "Small win",
+    "content": "Spoke up in the group project meeting without rehearsing it first. Felt shaky the whole time but I did it.",
+    "moodEmoji": "🙂",
+    "moodLabel": "Good",
+    "moodColor": "#355C4D",
+    "tags": [
+      "progress",
+      "anxiety"
+    ],
+    "isPrivate": false,
+    "date": "2026-07-30",
+    "createdAt": "2026-07-30T08:17:29.805Z",
+    "updatedAt": "2026-08-02T09:53:25.000Z"
+  }
+]

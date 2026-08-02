@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import {
   LayoutDashboard, Calendar, Users, Video, MessageSquare,
-  Heart, FileText, BarChart3, TrendingUp, Bot,
+  Heart, FileText, BarChart3, TrendingUp, Bot, BookOpen,
   Clock, FolderOpen, Star, Bell, Settings, Shield, HelpCircle,
   LogOut, HeartPulse, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import { useTheme } from './ThemeContext';
+import { api } from '../../lib/api';
 import { getUser, clearSession } from '../../lib/auth';
 
 const BADGE_COLOR = '#E8906A';
@@ -25,6 +26,7 @@ const navSections = [
     label: 'INSIGHTS',
     items: [
       { id: 'mood',      label: 'Mood Journey',      icon: Heart,     badge: null },
+      { id: 'journals',  label: 'Patient Journals',  icon: BookOpen,  badge: null },
       { id: 'notes',     label: 'Counseling Notes',  icon: FileText,  badge: null },
       { id: 'reports',   label: 'Reports',           icon: BarChart3, badge: null },
       { id: 'analytics', label: 'Analytics',         icon: TrendingUp,badge: null },
@@ -398,7 +400,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
 
         {/* Logout */}
         <button
-          onClick={() => { clearSession(); window.location.href = '/login'; }}
+          onClick={async () => { try { await api.post('/auth/logout'); } catch { /* already gone */ } clearSession(); window.location.href = '/login'; }}
           title={collapsed ? 'Logout' : undefined}
           style={{
             width: '100%',

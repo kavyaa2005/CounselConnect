@@ -16,9 +16,15 @@ const appointmentRoutes  = require('./routes/appointments.routes');
 const messageRoutes      = require('./routes/messages.routes');
 const counselorRoutes    = require('./routes/counselors.routes');
 const aiRoutes           = require('./routes/ai.routes');
+const sessionNoteRoutes = require('./routes/sessionNotes.routes');
 const journeyRoutes      = require('./routes/journey.routes');
 const notifRoutes        = require('./routes/notifications.routes');
 const doctorRoutes       = require('./routes/doctor.routes');
+const adminRoutes        = require('./routes/admin.routes');
+const videoRoutes        = require('./routes/video.routes');
+const applicationRoutes  = require('./routes/applications.routes');
+const billingRoutes      = require('./routes/billing.routes');
+const feedbackRoutes     = require('./routes/feedback.routes');
 
 const app = express();
 
@@ -46,8 +52,14 @@ app.use('/api/messages',      messageRoutes);
 app.use('/api/counselors',    counselorRoutes);
 app.use('/api/ai',            aiRoutes);
 app.use('/api/journey',       journeyRoutes);
+app.use('/api/session-notes', sessionNoteRoutes);
 app.use('/api/notifications', notifRoutes);
 app.use('/api/doctor',        doctorRoutes);
+app.use('/api/admin',         adminRoutes);
+app.use('/api/video',         videoRoutes);
+app.use('/api/applications',  applicationRoutes);
+app.use('/api/billing',       billingRoutes);
+app.use('/api/feedback',      feedbackRoutes);
 
 // Error handling
 app.use(notFound);

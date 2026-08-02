@@ -279,10 +279,29 @@ export function TopNav({ currentPage, onNavigate }: TopNavProps) {
             }}>
               <div style={{ padding: '14px 18px', borderBottom: `1px solid ${c.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontFamily: 'Inter', fontWeight: 600, fontSize: 14, color: c.textPrimary }}>Notifications</span>
-                <span style={{ fontFamily: 'Inter', fontSize: 12, color: c.primary, cursor: 'pointer', fontWeight: 500 }}>Mark all read</span>
+                <span
+                  onClick={() => {
+                    setNotifications(prev => prev.map(x => ({ ...x, unread: false })));
+                    api.post('/doctor/notifications/read', {}).catch(() => {});
+                  }}
+                  style={{ fontFamily: 'Inter', fontSize: 12, color: c.primary, cursor: 'pointer', fontWeight: 500 }}>Mark all read</span>
               </div>
+              {!notifications.length && (
+                <div style={{ padding: '24px 18px', textAlign: 'center', fontFamily: 'Inter', fontSize: 12.5, color: c.textMuted }}>
+                  No notifications yet
+                </div>
+              )}
               {notifications.map(n => (
-                <div key={n.id} style={{
+                <div
+                  key={n.id}
+                  onClick={() => {
+                    // Reading it in the dropdown counts as reading it.
+                    setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, unread: false } : x));
+                    api.post('/doctor/notifications/read', { ids: [n.id] }).catch(() => {});
+                    setShowNotifications(false);
+                    onNavigate('notifications');
+                  }}
+                  style={{
                   padding: '12px 18px',
                   borderBottom: `1px solid ${c.border}`,
                   background: n.unread ? c.veryLightSage : 'transparent',
@@ -392,7 +411,7 @@ export function TopNav({ currentPage, onNavigate }: TopNavProps) {
               ))}
               <div style={{ height: 1, background: c.border }} />
               <button
-                onClick={() => { setShowProfile(false); clearSession(); window.location.href = '/login'; }}
+                onClick={async () => { setShowProfile(false); try { await api.post('/auth/logout'); } catch { /* already gone */ } clearSession(); window.location.href = '/login'; }}
                 style={{
                   width: '100%',
                   padding: '10px 15px',
