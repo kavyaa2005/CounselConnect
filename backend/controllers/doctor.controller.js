@@ -65,6 +65,7 @@ const sendMessage = wrap((req, res) => success(res, { message: doctorService.sen
 const getDashboardStats = wrap((req, res) => success(res, { stats: doctorService.getDashboardStats(req.user.id) }));
 const getAnalytics = wrap((req, res) => success(res, { analytics: doctorService.getAnalytics(req.user.id) }));
 const getNotifications = wrap((req, res) => success(res, { notifications: doctorService.getNotifications(req.user.id) }));
+const getBadges = wrap((req, res) => success(res, doctorService.getBadgeCounts(req.user.id)));
 const getFeedback = wrap((req, res) => success(res, doctorService.getFeedback(req.user.id)));
 
 const getLogins = wrap((req, res) => success(res, { logins: doctorService.getLogins(req.user.id) }));
@@ -294,7 +295,7 @@ module.exports = {
   createAppointment, downloadAppointmentSummary,
   getReports, exportReport,
   downloadNotePdf, summariseNote, draftNote,
-  askAssistant, markNotificationsRead, replyToFeedback,
+  askAssistant, markNotificationsRead, replyToFeedback, getBadges,
   getPendingRequests, acceptAppointment, rejectAppointment,
   summariseSession, toggleSessionAction, getDaily, uploadProfilePhoto,
 };

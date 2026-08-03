@@ -52,6 +52,24 @@ export function NotificationsPage() {
     api.get('/doctor/settings').then(r => setSettings(r.data.settings || {})).catch(() => {});
   }, []);
 
+  /**
+   * Opening this page counts as seeing them.
+   *
+   * Marked after a short delay rather than instantly, so the unread styling
+   * survives long enough for you to see WHICH ones were new — then they're
+   * gone next visit. The sidebar badge clears either way, and comes back the
+   * moment something new arrives.
+   */
+  useEffect(() => {
+    if (!notifList.some(n => n.unread)) return;
+    const t = setTimeout(() => {
+      api.post('/doctor/notifications/read', {}).catch(() => {});
+    }, 1500);
+    return () => clearTimeout(t);
+    // Runs once per batch of unread items, not on every state change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notifList.length]);
+
   // Read state is persisted server-side, so it survives a refresh.
   const markRead = (id: string) => {
     setNotifList(prev => prev.map(n => n.id === id ? { ...n, unread: false } : n));

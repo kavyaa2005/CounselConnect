@@ -563,6 +563,37 @@ const getDashboardStats = (doctorId) => {
   };
 };
 
+
+/**
+ * Live counts for the sidebar badges.
+ *
+ * One cheap call instead of the sidebar hitting four endpoints. These were
+ * previously hardcoded strings in the component — '3', '5', '3' — so they
+ * showed the same numbers forever regardless of what was actually waiting.
+ *
+ * Each count means something slightly different, deliberately:
+ *   requests      — a to-do. Clears when you accept or decline, not on view.
+ *   messages      — unread from patients. Clears when you open the thread.
+ *   notifications — unseen. Clears when you open the Notifications page.
+ */
+const getBadgeCounts = (doctorId) => {
+  const doctor = getDoctor(doctorId);
+  const store = readStoreObj('messages.json');
+
+  const requests = readStore('appointments.json')
+    .filter(a => a.counselorId === doctor.counselorId && a.status === 'pending').length;
+
+  const messages = Object.values(store).reduce((sum, threads) => {
+    const msgs = threads[doctor.counselorId] || [];
+    // isMe is from the patient's perspective, so these are theirs
+    return sum + msgs.filter(m => m.isMe && !m.readByDoctor).length;
+  }, 0);
+
+  const notifications = getNotifications(doctorId).filter(n => !n.read).length;
+
+  return { requests, messages, notifications };
+};
+
 // ── Notifications ───────────────────────────────────────────────
 const getNotifications = (doctorId) => {
   const doctor = getDoctor(doctorId);
@@ -1511,7 +1542,7 @@ module.exports = {
   getNotes, createNote, updateNote, deleteNote,
   getConversations, getDoctorMessages, sendDoctorMessage,
   getAnalytics, getDashboardStats,
-  getNotifications, markNotificationsRead, getUnreadNotificationCount,
+  getNotifications, markNotificationsRead, getUnreadNotificationCount, getBadgeCounts,
   getFeedback, replyToFeedback,
   getDocuments, createDocument, deleteDocument, getDocument,
   createAppointment, getAppointmentSummary, getReportData, askAssistant, draftNote,

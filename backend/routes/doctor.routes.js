@@ -50,6 +50,7 @@ router.use(authenticate, requireRole('doctor'));
 // Dashboard / analytics / notifications
 router.get('/dashboard', ctrl.getDashboardStats);
 router.get('/analytics', ctrl.getAnalytics);
+router.get('/badges', ctrl.getBadges);
 router.get('/notifications', ctrl.getNotifications);
 router.post('/notifications/read', ctrl.markNotificationsRead);
 router.get('/feedback', ctrl.getFeedback);

@@ -11,15 +11,18 @@ import { getUser, clearSession } from '../../lib/auth';
 
 const BADGE_COLOR = '#E8906A';
 
+// Badges are looked up live by key. They used to be literal strings ('3',
+// '5', '3') baked into this array, so they never changed no matter what was
+// actually waiting.
 const navSections = [
   {
     label: null,
     items: [
       { id: 'dashboard',     label: 'Dashboard',        icon: LayoutDashboard, badge: null },
-      { id: 'appointments',  label: 'Appointments',     icon: Calendar,        badge: '3'  },
+      { id: 'appointments',  label: 'Appointments',     icon: Calendar,        badgeKey: 'requests' },
       { id: 'patients',      label: 'Patients',         icon: Users,           badge: null },
       { id: 'video',         label: 'Video Sessions',   icon: Video,           badge: null },
-      { id: 'chat',          label: 'Messages',         icon: MessageSquare,   badge: '5'  },
+      { id: 'chat',          label: 'Messages',         icon: MessageSquare,   badgeKey: 'messages' },
     ],
   },
   {
@@ -39,7 +42,7 @@ const navSections = [
       { id: 'availability',  label: 'Availability',   icon: Clock,    badge: null },
       { id: 'documents',     label: 'Documents',      icon: FolderOpen,badge: null },
       { id: 'feedback',      label: 'Feedback',       icon: Star,     badge: null },
-      { id: 'notifications', label: 'Notifications',  icon: Bell,     badge: '3'  },
+      { id: 'notifications', label: 'Notifications',  icon: Bell,     badgeKey: 'notifications' },
     ],
   },
   {
@@ -55,9 +58,11 @@ const navSections = [
 interface SidebarProps {
   currentPage: string;
   onNavigate: (page: string) => void;
+  /** Live counts, keyed to `badgeKey` above. */
+  badges?: Record<string, number>;
 }
 
-export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
+export function Sidebar({ currentPage, onNavigate, badges = {} }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { c } = useTheme();
   const doctor = getUser();
@@ -297,7 +302,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
                   </div>
 
                   {/* Badge */}
-                  {item.badge && !collapsed && (
+                  {(item as any).badgeKey && badges[(item as any).badgeKey] > 0 && !collapsed && (
                     <div style={{
                       flexShrink: 0,
                       minWidth: 20,
@@ -313,12 +318,12 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
                       padding: '0 5px',
                       fontFamily: 'Inter',
                     }}>
-                      {item.badge}
+                      {badges[(item as any).badgeKey] > 9 ? '9+' : badges[(item as any).badgeKey]}
                     </div>
                   )}
 
                   {/* Badge dot when collapsed */}
-                  {item.badge && collapsed && (
+                  {(item as any).badgeKey && badges[(item as any).badgeKey] > 0 && collapsed && (
                     <div style={{
                       position: 'absolute',
                       top: 6,

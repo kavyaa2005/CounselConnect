@@ -69,6 +69,15 @@ export function TopNav({ currentPage, onNavigate }: TopNavProps) {
 
   const unreadCount = notifications.filter(n => n.unread).length;
 
+  // Opening the bell counts as seeing them, same as visiting the page.
+  const markSeenOnOpen = () => {
+    if (!unreadCount) return;
+    setTimeout(() => {
+      setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+      api.post('/doctor/notifications/read', {}).catch(() => {});
+    }, 1500);
+  };
+
   return (
     <header style={{
       background: c.white,

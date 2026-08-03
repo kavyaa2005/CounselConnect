@@ -1,9 +1,10 @@
 // Doctor Panel — same UI as the standalone doctor app, now mounted at /doctor
 // and protected so only accounts with role "doctor" can access it.
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Navigate } from 'react-router';
 import { getUser, isLoggedIn } from './lib/auth';
 import { api } from './lib/api';
+import { getSocket } from './lib/callClient';
 import { Sidebar } from './components/doctor/Sidebar';
 import { TopNav } from './components/doctor/TopNav';
 import { DashboardPage } from './components/doctor/dashboard/DashboardPage';
@@ -47,6 +48,39 @@ export function DoctorPanel() {
       .then(r => setDarkMode(!!r.data.settings?.darkMode))
       .catch(() => {});
   }, []);
+
+  /* ── Live sidebar badges ──
+     Polled, and refreshed immediately whenever the doctor navigates — so
+     opening Messages or Notifications clears the count without waiting for
+     the next poll. A new message or request brings the badge straight back. */
+  const [badges, setBadges] = useState<Record<string, number>>({});
+
+  const refreshBadges = useCallback(() => {
+    api.get('/doctor/badges')
+      .then(r => setBadges(r.data || {}))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshBadges();
+    const t = setInterval(refreshBadges, 20000);
+    return () => clearInterval(t);
+  }, [refreshBadges]);
+
+  // Reading a page is what clears its badge, so re-check just after landing.
+  useEffect(() => {
+    const t = setTimeout(refreshBadges, 900);
+    return () => clearTimeout(t);
+  }, [currentPage, refreshBadges]);
+
+  // A message arriving while the panel is open should bump the badge at once
+  // rather than waiting up to 20 seconds for the poll.
+  useEffect(() => {
+    const sock = getSocket();
+    const bump = () => refreshBadges();
+    sock.on('chat:message', bump);
+    return () => { sock.off('chat:message', bump); };
+  }, [refreshBadges]);
 
   const toggleDark = () => {
     setDarkMode(prev => {
@@ -122,7 +156,7 @@ export function DoctorPanel() {
 
         {/* Sidebar — hidden during video session */}
         {!isVideoPage && (
-          <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
+          <Sidebar currentPage={currentPage} onNavigate={handleNavigate} badges={badges} />
         )}
 
         {/* Main Content */}
