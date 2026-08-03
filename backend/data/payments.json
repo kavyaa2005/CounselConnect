@@ -1,1 +1,46 @@
-[]
+[
+  {
+    "id": "f6d87baa-9255-4c7c-a1de-0696caff78b1",
+    "receiptNumber": "CC-2026-45X68Q",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "appointmentId": "adbfdb6f-65c0-4854-a2d8-937146e13ec5",
+    "counselorId": "c1",
+    "counselorName": "Dr. Sarah Chen",
+    "sessionType": "video",
+    "sessionDate": "July 26, 2026",
+    "sessionTime": "9:00 AM",
+    "amount": 80,
+    "currency": "USD",
+    "platformFee": 16,
+    "counselorPayout": 64,
+    "method": "upi",
+    "methodLabel": "UPI",
+    "gatewayReference": "SIM-22974938-92E",
+    "simulated": true,
+    "status": "paid",
+    "paidAt": "2026-08-03T17:27:39.310Z",
+    "createdAt": "2026-08-03T17:27:39.310Z"
+  },
+  {
+    "id": "b06fc001-c9c6-4031-a765-2b5887611908",
+    "receiptNumber": "CC-2026-QKH8S9",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "appointmentId": "976b16c4-51d9-4164-98e1-d21578c17adc",
+    "counselorId": "c5",
+    "counselorName": "Dr. James Rivera",
+    "sessionType": "video",
+    "sessionDate": "September 15, 2026",
+    "sessionTime": "3:00 PM",
+    "amount": 65,
+    "currency": "USD",
+    "platformFee": 13,
+    "counselorPayout": 52,
+    "method": "upi",
+    "methodLabel": "UPI",
+    "gatewayReference": "SIM-4619CDAA-0E4",
+    "simulated": true,
+    "status": "paid",
+    "paidAt": "2026-08-03T17:27:43.390Z",
+    "createdAt": "2026-08-03T17:27:43.390Z"
+  }
+]

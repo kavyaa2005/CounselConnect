@@ -74,7 +74,10 @@
     "dateTime": "2026-07-26T03:30:00.000Z",
     "price": 80,
     "status": "confirmed",
-    "createdAt": "2026-07-25T06:18:44.951Z"
+    "createdAt": "2026-07-25T06:18:44.951Z",
+    "paymentStatus": "paid",
+    "paymentId": "f6d87baa-9255-4c7c-a1de-0696caff78b1",
+    "updatedAt": "2026-08-03T17:27:39.312Z"
   },
   {
     "id": "976b16c4-51d9-4164-98e1-d21578c17adc",
@@ -88,7 +91,9 @@
     "dateTime": "2026-09-15T09:30:00.000Z",
     "price": 65,
     "status": "confirmed",
-    "paymentStatus": "unpaid",
-    "createdAt": "2026-08-02T09:59:37.050Z"
+    "paymentStatus": "paid",
+    "createdAt": "2026-08-02T09:59:37.050Z",
+    "paymentId": "b06fc001-c9c6-4031-a765-2b5887611908",
+    "updatedAt": "2026-08-03T17:27:43.391Z"
   }
 ]

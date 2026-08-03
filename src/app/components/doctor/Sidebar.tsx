@@ -70,7 +70,10 @@ export function Sidebar({ currentPage, onNavigate, badges = {} }: SidebarProps) 
   const doctorTitle = doctor?.title || 'Counselor';
   const initials = (doctor ? `${doctor.firstName?.[0] || ''}${doctor.lastName?.[0] || ''}` : 'DR').toUpperCase() || 'DR';
 
-  const W = collapsed ? 68 : 256;
+  const W = collapsed ? 72 : 256;
+  // Everything in the collapsed rail centres on one 44px square so the icons,
+  // dividers, avatar and logout all share a vertical axis.
+  const RAIL_ITEM = 44;
 
   return (
     <aside
@@ -92,8 +95,9 @@ export function Sidebar({ currentPage, onNavigate, badges = {} }: SidebarProps) 
         height: 64,
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: collapsed ? '0 12px' : '0 16px 0 20px',
+        // Collapsed: one centred column. Expanded: logo left, toggle right.
+        justifyContent: collapsed ? 'center' : 'space-between',
+        padding: collapsed ? 0 : '0 16px 0 20px',
         borderBottom: `1px solid ${c.border}`,
         flexShrink: 0,
         boxSizing: 'border-box',
@@ -102,9 +106,11 @@ export function Sidebar({ currentPage, onNavigate, badges = {} }: SidebarProps) 
         <div style={{
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'center',
           gap: 10,
           overflow: 'hidden',
-          flex: 1,
+          // flex:1 would push the mark to the left of a full-width child
+          flex: collapsed ? '0 0 auto' : 1,
           minWidth: 0,
         }}>
           <div style={{
@@ -193,7 +199,7 @@ export function Sidebar({ currentPage, onNavigate, badges = {} }: SidebarProps) 
         flex: 1,
         overflowY: 'auto',
         overflowX: 'hidden',
-        padding: collapsed ? '8px 10px' : '8px 12px',
+        padding: collapsed ? `8px ${(72 - RAIL_ITEM) / 2}px` : '8px 12px',
       }}>
         {navSections.map((section, sIdx) => (
           <div key={sIdx}>
@@ -214,7 +220,7 @@ export function Sidebar({ currentPage, onNavigate, badges = {} }: SidebarProps) 
 
             {/* Spacing between sections when collapsed */}
             {section.label && collapsed && sIdx > 0 && (
-              <div style={{ height: 1, background: c.border, margin: '8px 4px' }} />
+              <div style={{ height: 1, background: c.border, margin: '10px 6px' }} />
             )}
 
             {section.items.map((item) => {
@@ -227,14 +233,16 @@ export function Sidebar({ currentPage, onNavigate, badges = {} }: SidebarProps) 
                   onClick={() => onNavigate(item.id)}
                   title={collapsed ? item.label : undefined}
                   style={{
-                    width: '100%',
+                    width: collapsed ? RAIL_ITEM : '100%',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: collapsed ? 'center' : 'space-between',
                     gap: 0,
-                    padding: collapsed ? '0' : '0 10px',
-                    height: 40,
-                    borderRadius: 8,
+                    padding: collapsed ? 0 : '0 10px',
+                    height: collapsed ? RAIL_ITEM : 40,
+                    borderRadius: collapsed ? 12 : 8,
+                    marginLeft: collapsed ? 'auto' : undefined,
+                    marginRight: collapsed ? 'auto' : undefined,
                     border: 'none',
                     cursor: 'pointer',
                     marginBottom: 1,
@@ -263,8 +271,10 @@ export function Sidebar({ currentPage, onNavigate, badges = {} }: SidebarProps) 
                     }
                   }}
                 >
-                  {/* Left accent for active */}
-                  {isActive && (
+                  {/* Left accent for active — expanded only. On the collapsed
+                      rail the filled square already reads as selected, and a
+                      3px sliver on a 44px pill just looks like a stray mark. */}
+                  {isActive && !collapsed && (
                     <div style={{
                       position: 'absolute',
                       left: 0,
@@ -281,9 +291,13 @@ export function Sidebar({ currentPage, onNavigate, badges = {} }: SidebarProps) 
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
+                    justifyContent: 'center',
                     gap: 11,
                     overflow: 'hidden',
-                    flex: 1,
+                    // This was `flex: 1` unconditionally, so when collapsed the
+                    // icon sat at the LEFT of a full-width child even though
+                    // the button itself was centred. That was the main mess.
+                    flex: collapsed ? '0 0 auto' : 1,
                   }}>
                     <Icon
                       size={18}
@@ -347,21 +361,28 @@ export function Sidebar({ currentPage, onNavigate, badges = {} }: SidebarProps) 
         {/* Doctor profile card */}
         <div
           onClick={() => onNavigate('profile')}
+          title={collapsed ? `${doctorName} · ${doctorTitle}` : undefined}
           style={{
-            margin: collapsed ? '10px 10px 0' : '10px 12px 0',
-            padding: collapsed ? '10px' : '10px 12px',
-            borderRadius: 10,
-            background: c.background,
-            border: `1px solid ${c.border}`,
+            // Collapsed: a plain centred avatar on the same 44px axis as the
+            // nav icons. A bordered card around a single avatar in a 72px rail
+            // reads as clutter and never lines up with anything.
+            width: collapsed ? RAIL_ITEM : undefined,
+            height: collapsed ? RAIL_ITEM : undefined,
+            margin: collapsed ? '10px auto 0' : '10px 12px 0',
+            padding: collapsed ? 0 : '10px 12px',
+            borderRadius: collapsed ? 12 : 10,
+            background: collapsed ? 'transparent' : c.background,
+            border: collapsed ? 'none' : `1px solid ${c.border}`,
             display: 'flex',
             alignItems: 'center',
             gap: 10,
             cursor: 'pointer',
             transition: 'background 0.15s',
-            justifyContent: collapsed ? 'center' : 'flex-start',
+            justifyContent: 'center',
+            boxSizing: 'border-box',
           }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = c.veryLightSage; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = c.background; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = collapsed ? 'transparent' : c.background; }}
         >
           <div style={{
             width: 32,
@@ -408,12 +429,15 @@ export function Sidebar({ currentPage, onNavigate, badges = {} }: SidebarProps) 
           onClick={async () => { try { await api.post('/auth/logout'); } catch { /* already gone */ } clearSession(); window.location.href = '/login'; }}
           title={collapsed ? 'Logout' : undefined}
           style={{
-            width: '100%',
+            width: collapsed ? RAIL_ITEM : '100%',
+            height: collapsed ? RAIL_ITEM : undefined,
             display: 'flex',
             alignItems: 'center',
             justifyContent: collapsed ? 'center' : 'flex-start',
             gap: 10,
-            padding: collapsed ? '12px 0' : '12px 22px',
+            padding: collapsed ? 0 : '12px 22px',
+            margin: collapsed ? '4px auto 10px' : undefined,
+            borderRadius: collapsed ? 12 : 0,
             border: 'none',
             background: 'transparent',
             cursor: 'pointer',
