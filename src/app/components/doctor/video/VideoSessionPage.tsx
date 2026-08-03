@@ -7,7 +7,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Mic, MicOff, Camera, CameraOff, Monitor, MonitorOff, PhoneOff, MessageSquare,
-  Clock, Send, Video, Search, AlertCircle, Loader2, CheckCircle, History, Phone,
+  Clock, Send, Video, Search, AlertCircle, Loader2, CheckCircle, History, Phone, ArrowLeft,
 } from 'lucide-react';
 import { useTheme } from '../ThemeContext';
 import { api } from '../../../lib/api';
@@ -15,7 +15,11 @@ import { CallSession, getSocket, checkVideoSupport } from '../../../lib/callClie
 import type { CallStatus, IncomingCall } from '../../../lib/callClient';
 import { takePendingCall } from '../../../lib/callInbox';
 
-export function VideoSessionPage({ onNavigate }: { onNavigate: (page: string) => void }) {
+export function VideoSessionPage({ onNavigate, onCallStateChange }: {
+  onNavigate: (page: string) => void;
+  /** Lets the panel hide its chrome for an actual call, but not for the lobby. */
+  onCallStateChange?: (inCall: boolean) => void;
+}) {
   const { c: colors } = useTheme();
 
   /* ── lobby ── */
@@ -267,6 +271,29 @@ export function VideoSessionPage({ onNavigate }: { onNavigate: (page: string) =>
 
   const inCall = ['calling', 'connecting', 'connected', 'ended'].includes(status);
 
+  // Tell the panel, so the sidebar and top nav only disappear during a call.
+  useEffect(() => { onCallStateChange?.(inCall); }, [inCall, onCallStateChange]);
+
+  // Never leave the panel stuck in immersive mode if this page unmounts
+  // mid-call — e.g. the doctor navigates away with a browser gesture.
+  useEffect(() => () => { onCallStateChange?.(false); }, [onCallStateChange]);
+
+  /** Ends the call and returns to the lobby. */
+  const leaveSession = () => {
+    if (['calling', 'connecting', 'connected'].includes(status)) {
+      if (status === 'calling') sessionRef.current?.cancel();
+      else sessionRef.current?.end();
+    }
+    sessionRef.current?.destroy();
+    sessionRef.current = null;
+    setStatus('idle');
+    setPeer(null);
+    setEndedReason(null);
+    setLocalStream(null);
+    setRemoteStream(null);
+    loadLobby();
+  };
+
   /* ─────────── incoming banner ─────────── */
   const incomingBanner = incoming && (
     <motion.div
@@ -455,11 +482,25 @@ export function VideoSessionPage({ onNavigate }: { onNavigate: (page: string) =>
               : 'Session ended'}
           </p>
         </div>
-        {status === 'connected' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 9, background: 'rgba(255,255,255,0.08)', color: 'white', fontSize: 12 }}>
-            <Clock size={12} /> {clock}
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {status === 'connected' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 9, background: 'rgba(255,255,255,0.08)', color: 'white', fontSize: 12 }}>
+              <Clock size={12} /> {clock}
+            </div>
+          )}
+          {/* An explicit way out, so the call is never a dead end */}
+          <button
+            onClick={leaveSession}
+            title="End the session and go back"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px',
+              borderRadius: 10, border: '1px solid rgba(255,255,255,0.18)',
+              background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.85)',
+              fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter',
+            }}>
+            <ArrowLeft size={13} /> Leave session
+          </button>
+        </div>
       </div>
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>

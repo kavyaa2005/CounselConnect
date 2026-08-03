@@ -100,7 +100,15 @@ export function DoctorPanel() {
     setCurrentPage(page as Page);
   };
 
+  // The chrome used to hide whenever the video PAGE was open, which stranded
+  // you in the lobby with no sidebar and no way back. It should only go away
+  // during an actual call, where an immersive view is the point.
+  const [inCall, setInCall] = useState(false);
   const isVideoPage = currentPage === 'video';
+  const immersive = isVideoPage && inCall;
+
+  // Leaving the video page should never leave the panel stuck in call mode.
+  useEffect(() => { if (!isVideoPage) setInCall(false); }, [isVideoPage]);
   const colors = getColors(darkMode);
 
   const renderPage = () => {
@@ -108,7 +116,7 @@ export function DoctorPanel() {
       case 'dashboard': return <DashboardPage onNavigate={handleNavigate} />;
       case 'appointments': return <AppointmentsPage onNavigate={handleNavigate} />;
       case 'patients': return <PatientsPage onNavigate={handleNavigate} />;
-      case 'video': return <VideoSessionPage onNavigate={handleNavigate} />;
+      case 'video': return <VideoSessionPage onNavigate={handleNavigate} onCallStateChange={setInCall} />;
       case 'chat': return <ChatPage onNavigate={handleNavigate} />;
       case 'ai': return <AIAssistantPage onNavigate={handleNavigate} />;
       case 'mood': return <MoodJourneyPage />;
@@ -149,20 +157,20 @@ export function DoctorPanel() {
       >
         {/* Ring on any screen; the video page handles its own ringing */}
         <IncomingCallRinger
-          suppressed={isVideoPage}
+          suppressed={immersive}
           theme={darkMode ? 'dark' : 'light'}
           onAccept={() => setCurrentPage('video')}
         />
 
         {/* Sidebar — hidden during video session */}
-        {!isVideoPage && (
+        {!immersive && (
           <Sidebar currentPage={currentPage} onNavigate={handleNavigate} badges={badges} />
         )}
 
         {/* Main Content */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* Top Nav — hidden during video session */}
-          {!isVideoPage && (
+          {!immersive && (
             <TopNav
               currentPage={currentPage}
               onNavigate={handleNavigate}
@@ -173,7 +181,7 @@ export function DoctorPanel() {
           <main
             style={{
               flex: 1,
-              overflowY: isVideoPage ? 'hidden' : 'auto',
+              overflowY: immersive ? 'hidden' : 'auto',
               overflowX: 'hidden',
               background: getPageBackground(),
             }}
