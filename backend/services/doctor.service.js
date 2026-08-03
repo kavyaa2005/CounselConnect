@@ -761,7 +761,7 @@ const humanSize = (bytes) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-const createDocument = (doctorId, { name, type, size, patientId, storedName, mimeType, bytes }) => {
+const createDocument = (doctorId, { name, type, size, patientId, storedName, mimeType, bytes, sharedWithPatient, note }) => {
   const doctor = getDoctor(doctorId);
   const docs = readStore('documents.json');
   const ext = String(name || '').split('.').pop().toLowerCase();
@@ -777,6 +777,12 @@ const createDocument = (doctorId, { name, type, size, patientId, storedName, mim
     // Present only for real uploads; metadata-only rows keep this null.
     storedName: storedName || null,
     patientId: patientId || null,
+    // A document is only visible to the client when the counselor says so.
+    // Clinical files in the same library must never leak by default.
+    sharedWithPatient: !!sharedWithPatient && !!patientId,
+    sharedAt: sharedWithPatient && patientId ? new Date().toISOString() : null,
+    // A line of context — "read this before Thursday" beats a bare filename.
+    note: String(note || '').trim().slice(0, 300),
     uploadedAt: new Date().toISOString(),
   };
   docs.push(docItem);
@@ -801,6 +807,39 @@ const deleteDocument = (doctorId, id) => {
     throw Object.assign(new Error('Document not found'), { statusCode: 404 });
   }
   writeStore('documents.json', filtered);
+};
+
+
+/**
+ * Shares (or unshares) a document with the client it belongs to.
+ *
+ * Sharing requires a patient — a general file has nobody to share it with.
+ */
+const setDocumentShared = (doctorId, id, shared) => {
+  const doctor = getDoctor(doctorId);
+  const docs = readStore('documents.json');
+  const idx = docs.findIndex(d => d.id === id && d.counselorId === doctor.counselorId);
+  if (idx === -1) throw Object.assign(new Error('Document not found'), { statusCode: 404 });
+
+  if (shared && !docs[idx].patientId) {
+    throw Object.assign(new Error('Assign this file to a patient before sharing it'), { statusCode: 400 });
+  }
+
+  docs[idx].sharedWithPatient = !!shared;
+  docs[idx].sharedAt = shared ? new Date().toISOString() : null;
+  writeStore('documents.json', docs);
+  return docs[idx];
+};
+
+/** Everything this counselor has filed against one patient. */
+const getPatientDocuments = (doctorId, patientId) => {
+  const doctor = getDoctor(doctorId);
+  if (!getRelatedUserIds(doctor).has(patientId)) {
+    throw Object.assign(new Error('Patient not found'), { statusCode: 404 });
+  }
+  return readStore('documents.json')
+    .filter(d => d.counselorId === doctor.counselorId && d.patientId === patientId)
+    .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
 };
 
 // ── Security: real login history ────────────────────────────────
@@ -1545,6 +1584,7 @@ module.exports = {
   getNotifications, markNotificationsRead, getUnreadNotificationCount, getBadgeCounts,
   getFeedback, replyToFeedback,
   getDocuments, createDocument, deleteDocument, getDocument,
+  setDocumentShared, getPatientDocuments,
   createAppointment, getAppointmentSummary, getReportData, askAssistant, draftNote,
   getDailyBreakdown,
   summariseNote, getNoteForExport, summariseSession, toggleSessionAction,

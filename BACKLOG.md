@@ -25,6 +25,7 @@ Updated as work lands. Admin section pending the spec.
 - **Password reset by OTP**: real flow with expiry, attempt limits, rate limiting, no account enumeration
 - **Change password**
 - **Resources reachable** from the dashboard sidebar
+- **My Files**: everything the counselor has shared, with previews and downloads
 
 ### Not done
 | # | Item | Notes |
@@ -56,6 +57,7 @@ Updated as work lands. Admin section pending the spec.
 - Feedback: view, read, **respond**
 - Chat: real-time, typing indicator, attachments (receive), emoji, transcript export
 - Documents: real upload/download/preview/delete
+- **Share files with a patient**: upload from their card, explicit share/private flag, note attached, unshare any time
 - **Real TOTP two-factor** (RFC 6238, verified against the reference vectors): QR enrolment, recovery codes, login challenge, password-confirmed disable
 - **Dark mode persists** to the account
 
@@ -64,7 +66,6 @@ Updated as work lands. Admin section pending the spec.
 |---|---|---|
 | D3 | **Revoke active sessions / devices** | Login history is read-only. |
 | D4 | **Doctor cannot SEND chat attachments** | Paperclip uploads to their own Documents and posts a text line. No doctor attach endpoint. Asymmetric — clients can send files, counselors can't. |
-| D5 | **Client-uploaded appointment documents not visible** | Data is stored and returned by the API; only the appointment drawer shows them. No Patients-page surface. |
 | D6 | **Settings: language / privacy / devices** | Render "Settings for this section coming soon". |
 | D8 | **Treatment progress is not settable** | It's `Math.round(avgMood * 10)` — a computed mood proxy the counselor cannot update. |
 | D9 | Call quality stats, device switcher, fullscreen, keyboard shortcuts, in-call note pad | Built once, lost when the video pages were rebuilt. |

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Search, Filter, Plus, Phone, Mail, FileText, X, BookOpen, Lock } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Search, Filter, Plus, Phone, Mail, FileText, X, BookOpen, Lock, Upload, Trash2 } from 'lucide-react';
 import { useTheme } from '../ThemeContext';
 import { api } from '../../../lib/api';
 
@@ -86,6 +86,66 @@ export function PatientsPage({ onNavigate }: { onNavigate: (page: string) => voi
   // Shared journal entries for the Journal tab
   const [journal, setJournal] = useState<any | null>(null);
   const [journalLoading, setJournalLoading] = useState(false);
+
+  /* ── Files shared with this patient ── */
+  const [files, setFiles] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [shareOnUpload, setShareOnUpload] = useState(true);
+  const [uploadNote, setUploadNote] = useState('');
+  const [fileMsg, setFileMsg] = useState<{ text: string; bad?: boolean } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const flashFile = (text: string, bad = false) => {
+    setFileMsg({ text, bad });
+    setTimeout(() => setFileMsg(null), 3200);
+  };
+
+  const loadFiles = (pid: string) =>
+    api.get(`/doctor/patients/${pid}/documents`)
+      .then(r => setFiles(r.data.documents || []))
+      .catch(() => setFiles([]));
+
+  useEffect(() => {
+    if (selected) loadFiles(selected); else setFiles([]);
+  }, [selected]);
+
+  const uploadForPatient = async (file: File) => {
+    if (!selected) return;
+    if (file.size > 25 * 1024 * 1024) { flashFile('That file is over the 25 MB limit', true); return; }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('patientId', selected);
+      // Sharing is the common case from this screen — the counselor is
+      // uploading *for* the patient, not filing something private.
+      fd.append('sharedWithPatient', String(shareOnUpload));
+      if (uploadNote.trim()) fd.append('note', uploadNote.trim());
+      await api.upload('/doctor/documents/upload', fd);
+      setUploadNote('');
+      loadFiles(selected);
+      flashFile(shareOnUpload ? 'Uploaded and shared with the patient' : 'Uploaded — kept private to you');
+    } catch (e: any) {
+      flashFile(e.message || 'Upload failed', true);
+    } finally { setUploading(false); }
+  };
+
+  const toggleShare = async (doc: any) => {
+    try {
+      await api.put(`/doctor/documents/${doc.id}/share`, { shared: !doc.sharedWithPatient });
+      if (selected) loadFiles(selected);
+      flashFile(doc.sharedWithPatient ? 'No longer shared' : 'Shared with the patient');
+    } catch (e: any) { flashFile(e.message || 'Could not update', true); }
+  };
+
+  const removeFile = async (doc: any) => {
+    if (!window.confirm(`Delete "${doc.name}"? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/doctor/documents/${doc.id}`);
+      if (selected) loadFiles(selected);
+      flashFile('File deleted');
+    } catch (e: any) { flashFile(e.message || 'Could not delete', true); }
+  };
   useEffect(() => {
     if (!selected) { setJournal(null); return; }
     let cancelled = false;
@@ -284,7 +344,7 @@ export function PatientsPage({ onNavigate }: { onNavigate: (page: string) => voi
 
           {/* Tabs */}
           <div style={{ display: 'flex', gap: 3, marginBottom: 18, background: c.background, borderRadius: 9, padding: 3 }}>
-            {['overview', 'journal', 'notes', 'history'].map(tab => (
+            {['overview', 'journal', 'notes', 'files', 'history'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -327,8 +387,16 @@ export function PatientsPage({ onNavigate }: { onNavigate: (page: string) => voi
                 <FileText size={13} /> Add Session Notes
               </button>
               <div style={{ display: 'flex', gap: 7 }}>
-                <button style={{ flex: 1, padding: '8px', borderRadius: 10, border: `1px solid ${c.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, cursor: 'pointer' }}>Upload File</button>
-                <button style={{ flex: 1, padding: '8px', borderRadius: 10, border: `1px solid ${c.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, cursor: 'pointer' }}>View History</button>
+                <button
+                  onClick={() => setActiveTab('files')}
+                  style={{ flex: 1, padding: '8px', borderRadius: 10, border: `1px solid ${c.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, cursor: 'pointer' }}>
+                  Upload File{files.length ? ` (${files.length})` : ''}
+                </button>
+                <button
+                  onClick={() => setActiveTab('history')}
+                  style={{ flex: 1, padding: '8px', borderRadius: 10, border: `1px solid ${c.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, cursor: 'pointer' }}>
+                  View History
+                </button>
               </div>
             </div>
           )}
@@ -419,6 +487,117 @@ export function PatientsPage({ onNavigate }: { onNavigate: (page: string) => voi
                     </span>
                   </div>
                   <p style={{ fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, margin: 0, lineHeight: 1.5 }}>{note.text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+
+          {activeTab === 'files' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {fileMsg && (
+                <div style={{
+                  padding: '9px 11px', borderRadius: 9,
+                  background: fileMsg.bad ? '#FFEBEE' : c.veryLightSage,
+                  border: `1px solid ${fileMsg.bad ? '#FFCDD2' : c.mintAccent}`,
+                }}>
+                  <span style={{ fontFamily: 'Inter', fontSize: 12, color: fileMsg.bad ? c.error : c.primary }}>{fileMsg.text}</span>
+                </div>
+              )}
+
+              {/* Upload */}
+              <div style={{ padding: 13, borderRadius: 12, background: c.background, border: `1px dashed ${c.border}` }}>
+                <p style={{ fontFamily: 'Inter', fontSize: 12.5, fontWeight: 700, color: c.textPrimary, margin: '0 0 3px' }}>
+                  Send a file to {selectedPatient.name.split(' ')[0]}
+                </p>
+                <p style={{ fontFamily: 'Inter', fontSize: 11.5, color: c.textMuted, margin: '0 0 10px', lineHeight: 1.5 }}>
+                  Worksheets, homework, reading — anything they should have.
+                </p>
+
+                <input
+                  value={uploadNote}
+                  onChange={e => setUploadNote(e.target.value)}
+                  placeholder="A note to go with it (optional)"
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `1px solid ${c.border}`, fontFamily: 'Inter', fontSize: 12, color: c.textPrimary, background: c.white, outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
+                />
+
+                {/* Sharing is explicit — a clinical file filed against a patient
+                    must never reach them by accident. */}
+                <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={shareOnUpload}
+                    onChange={e => setShareOnUpload(e.target.checked)}
+                    style={{ accentColor: c.primary, width: 14, height: 14 }}
+                  />
+                  <span style={{ fontFamily: 'Inter', fontSize: 12, color: c.textSecondary }}>
+                    {shareOnUpload
+                      ? 'Visible to the patient in their Files'
+                      : 'Private to you — the patient will not see it'}
+                  </span>
+                </label>
+
+                <input ref={fileRef} type="file" style={{ display: 'none' }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadForPatient(f); e.target.value = ''; }} />
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  style={{ width: '100%', padding: '9px', borderRadius: 9, border: 'none', background: c.primary, color: 'white', fontFamily: 'Inter', fontSize: 12.5, fontWeight: 600, cursor: uploading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <Upload size={13} /> {uploading ? 'Uploading…' : 'Choose a file'}
+                </button>
+              </div>
+
+              {/* Existing files */}
+              {!files.length && (
+                <p style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted, textAlign: 'center', padding: '14px 0' }}>
+                  Nothing filed for this patient yet.
+                </p>
+              )}
+
+              {files.map(f => (
+                <div key={f.id} style={{ padding: 11, borderRadius: 11, background: c.white, border: `1px solid ${c.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+                    <FileText size={14} color={c.primary} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontFamily: 'Inter', fontSize: 12.5, fontWeight: 600, color: c.textPrimary, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {f.name}
+                      </p>
+                      <p style={{ fontFamily: 'Inter', fontSize: 11, color: c.textMuted, margin: '2px 0 0' }}>
+                        {f.size} · {new Date(f.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </p>
+                      {f.note && (
+                        <p style={{ fontFamily: 'Inter', fontSize: 11.5, color: c.textSecondary, margin: '4px 0 0', fontStyle: 'italic' }}>
+                          “{f.note}”
+                        </p>
+                      )}
+                    </div>
+                    <span style={{
+                      flexShrink: 0, padding: '2px 7px', borderRadius: 20, fontFamily: 'Inter', fontSize: 10, fontWeight: 700,
+                      background: f.sharedWithPatient ? c.veryLightSage : c.background,
+                      color: f.sharedWithPatient ? c.primary : c.textMuted,
+                    }}>
+                      {f.sharedWithPatient ? 'Shared' : 'Private'}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 6, marginTop: 9 }}>
+                    <button
+                      onClick={() => api.download(`/doctor/documents/${f.id}/download`, f.name).catch((e: any) => flashFile(e.message, true))}
+                      style={{ flex: 1, padding: '6px', borderRadius: 8, border: `1px solid ${c.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 11.5, color: c.textSecondary, cursor: 'pointer' }}>
+                      Download
+                    </button>
+                    <button
+                      onClick={() => toggleShare(f)}
+                      style={{ flex: 1, padding: '6px', borderRadius: 8, border: 'none', background: f.sharedWithPatient ? c.background : c.primary, color: f.sharedWithPatient ? c.textSecondary : 'white', fontFamily: 'Inter', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+                      {f.sharedWithPatient ? 'Unshare' : 'Share'}
+                    </button>
+                    <button
+                      onClick={() => removeFile(f)}
+                      title="Delete"
+                      style={{ padding: '6px 9px', borderRadius: 8, border: `1px solid ${c.border}`, background: 'transparent', color: c.error, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

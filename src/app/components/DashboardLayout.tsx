@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard, User, Brain, Calendar, Activity, MessageCircle,
   Video, Sparkles, Star, Settings, LogOut, ChevronRight, CreditCard,
-  Menu, X, BookOpen, LifeBuoy, ShieldAlert
+  Menu, X, BookOpen, LifeBuoy, ShieldAlert, FolderOpen
 } from 'lucide-react';
 import { CC } from '../lib/colors';
 import { useAuth } from '../context/AuthContext';
@@ -46,6 +46,7 @@ const sidebarGroups = [
     items: [
       { icon: CreditCard, label: 'Payments', path: '/dashboard/billing' },
       { icon: Star, label: 'Feedback', path: '/dashboard/feedback' },
+      { icon: FolderOpen, label: 'My Files', path: '/dashboard/files' },
       { icon: BookOpen, label: 'Resources', path: '/dashboard/resources' },
       { icon: LifeBuoy, label: 'Help', path: '/dashboard/help' },
       { icon: User, label: 'Profile', path: '/dashboard/settings?tab=profile' },

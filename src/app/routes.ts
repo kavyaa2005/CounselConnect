@@ -9,6 +9,7 @@ import { JoinAsCounselorPage } from './components/pages/JoinAsCounselorPage';
 import { AboutPage } from './components/pages/AboutPage';
 import { EmergencyPage } from './components/pages/EmergencyPage';
 import { SupportPage } from './components/pages/SupportPage';
+import { MyFilesPage } from './components/pages/MyFilesPage';
 import { ResourcesPage } from './components/pages/ResourcesPage';
 import { DashboardLayout } from './components/DashboardLayout';
 import { DashboardHomePage } from './components/pages/DashboardHomePage';
@@ -66,6 +67,7 @@ export const router = createBrowserRouter([
           { path: 'feedback', Component: FeedbackPage },
           { path: 'emergency', Component: EmergencyPage },
           { path: 'resources', Component: ResourcesPage },
+          { path: 'files', Component: MyFilesPage },
           { path: 'help', Component: SupportPage },
         ],
       },

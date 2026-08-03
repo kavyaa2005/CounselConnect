@@ -758,5 +758,13 @@
     "ip": "::1",
     "at": "2026-08-02T17:12:06.617Z",
     "status": "success"
+  },
+  {
+    "accountId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "role": "user",
+    "device": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    "ip": "::1",
+    "at": "2026-08-03T15:39:23.321Z",
+    "status": "success"
   }
 ]

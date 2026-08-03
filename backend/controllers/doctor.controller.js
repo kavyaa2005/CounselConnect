@@ -206,16 +206,27 @@ const uploadDocument = wrap((req, res) => {
   if (!req.file) {
     throw Object.assign(new Error('No file was uploaded'), { statusCode: 400 });
   }
+  // 'true' arrives as a string from multipart form data
+  const shared = req.body.sharedWithPatient === 'true' || req.body.sharedWithPatient === true;
   const doc = doctorService.createDocument(req.user.id, {
     name: req.file.originalname,
     type: req.body.type || 'file',
     patientId: req.body.patientId || null,
+    sharedWithPatient: shared,
+    note: req.body.note,
     storedName: req.file.filename,
     mimeType: req.file.mimetype,
     bytes: req.file.size,
   });
-  success(res, { document: doc }, 'Document uploaded', 201);
+  success(res, { document: doc }, shared ? 'Shared with your patient' : 'Document uploaded', 201);
 });
+
+const shareDocument = wrap((req, res) =>
+  success(res, { document: doctorService.setDocumentShared(req.user.id, req.params.id, req.body.shared) },
+    req.body.shared ? 'Shared with your patient' : 'No longer shared'));
+
+const patientDocuments = wrap((req, res) =>
+  success(res, { documents: doctorService.getPatientDocuments(req.user.id, req.params.id) }));
 
 const downloadDocument = wrap((req, res) => {
   const path = require('path');
@@ -292,6 +303,7 @@ module.exports = {
   getConversations, getMessages, sendMessage,
   getDashboardStats, getAnalytics, getNotifications, getFeedback,
   getDocuments, createDocument, deleteDocument, uploadDocument, downloadDocument,
+  shareDocument, patientDocuments,
   createAppointment, downloadAppointmentSummary,
   getReports, exportReport,
   downloadNotePdf, summariseNote, draftNote,

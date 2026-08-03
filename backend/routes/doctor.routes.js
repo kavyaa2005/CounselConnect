@@ -81,6 +81,7 @@ router.put('/password', ctrl.changePassword);
 // Patients
 router.get('/patients', ctrl.getPatients);
 router.get('/patients/:id', ctrl.getPatientDetail);
+router.get('/patients/:id/documents', ctrl.patientDocuments);
 
 // Patient journals (shared entries only) + PDF export
 router.get('/journals', ctrl.getJournalOverview);
@@ -139,6 +140,7 @@ router.get('/documents', ctrl.getDocuments);
 router.post('/documents', ctrl.createDocument);
 router.post('/documents/upload', upload.single('file'), ctrl.uploadDocument);
 router.get('/documents/:id/download', ctrl.downloadDocument);
+router.put('/documents/:id/share', ctrl.shareDocument);
 router.delete('/documents/:id', ctrl.deleteDocument);
 
 module.exports = router;
