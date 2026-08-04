@@ -96,5 +96,37 @@
     },
     "createdAt": "2026-07-25T03:28:48.810Z",
     "updatedAt": "2026-08-02T10:28:13.291Z"
+  },
+  {
+    "id": "62bdb93d-ce7a-42a9-944c-6d55b281b6e9",
+    "firstName": "Kavya",
+    "lastName": "Vaghela ",
+    "email": "vaghelakavya017@gmail.com",
+    "passwordHash": "$2a$12$JkuuBiEf3WfOCRZcHR4peeLYueIB1sW9hUrLlRqNORlolpcpqCElC",
+    "phone": "6354760660",
+    "bio": "Hey there!! I'm an student who works with an comapny and a cafe owner in mountains ",
+    "avatar": "",
+    "reason": "Relationship Challenges",
+    "sessionType": "A Mix of Both",
+    "frequency": "Flexible",
+    "goals": [
+      "Improve sleep",
+      "Mindfulness",
+      "Heal from trauma"
+    ],
+    "notifications": {
+      "sessions": true,
+      "moodReminders": true,
+      "messages": true,
+      "aiInsights": false,
+      "newsletter": false
+    },
+    "privacy": {
+      "shareProgress": false,
+      "anonymousData": true,
+      "profileVisible": true
+    },
+    "createdAt": "2026-08-04T03:48:03.963Z",
+    "updatedAt": "2026-08-04T04:25:09.432Z"
   }
 ]

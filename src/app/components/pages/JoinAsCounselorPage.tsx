@@ -37,6 +37,7 @@ export function JoinAsCounselorPage() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [stepError, setStepError] = useState('');
   const [showPass, setShowPass] = useState(false);
 
   // Status lookup
@@ -50,6 +51,7 @@ export function JoinAsCounselorPage() {
   const set = (k: string, v: string) => {
     setForm(f => ({ ...f, [k]: v }));
     setErrors(e => ({ ...e, [k]: '' }));
+    setStepError('');
   };
 
   const addFiles = (list: FileList | null, kind: 'degree' | 'certs') => {
@@ -99,14 +101,19 @@ export function JoinAsCounselorPage() {
       if (!form.licenseNumber.trim()) e.licenseNumber = 'Your licence / registration number is required';
       else if (form.licenseNumber.trim().length < 4) e.licenseNumber = 'Licence numbers are at least 4 characters';
 
-      // Experience and fee are optional, but nonsense values shouldn't reach admin.
+      // Experience and fee are optional, but nonsense shouldn't reach admin.
+      //
+      // Parse the leading number rather than demanding a bare digit: the
+      // placeholder invites "7 years", and Number('7 years') is NaN — which
+      // silently blocked the whole form.
       if (form.experience.trim()) {
-        const yrs = Number(form.experience);
-        if (!Number.isFinite(yrs) || yrs < 0) e.experience = 'Enter experience as a number of years';
+        const match = form.experience.match(/\d+(\.\d+)?/);
+        const yrs = match ? Number(match[0]) : NaN;
+        if (!Number.isFinite(yrs)) e.experience = 'Include a number, e.g. "7 years"';
         else if (yrs > 60) e.experience = 'Please double-check — over 60 years?';
       }
       if (form.price.trim()) {
-        const fee = Number(form.price);
+        const fee = Number(String(form.price).replace(/[^\d.]/g, ''));
         if (!Number.isFinite(fee) || fee < 0) e.price = 'Enter the fee as a number';
       }
       if (form.bio.trim() && form.bio.trim().length < 20) {
@@ -122,7 +129,12 @@ export function JoinAsCounselorPage() {
     return Object.keys(e).length === 0;
   };
 
-  const next = () => { if (validateStep(step)) setStep(s => Math.min(3, s + 1)); };
+  const next = () => {
+    if (validateStep(step)) { setStep(s => Math.min(3, s + 1)); setStepError(''); return; }
+    // A silently dead Continue button is the worst possible outcome — if
+    // something failed validation, always say something.
+    setStepError('Please check the highlighted fields above.');
+  };
   const back = () => setStep(s => Math.max(1, s - 1));
 
   async function submit() {
@@ -405,7 +417,8 @@ export function JoinAsCounselorPage() {
                     <div>
                       <Label>Years of experience</Label>
                       <input value={form.experience} onChange={e => set('experience', e.target.value)}
-                        placeholder="7 years" style={inputStyle()} />
+                        placeholder="7 years" style={inputStyle(errors.experience)} />
+                      <Err msg={errors.experience} />
                     </div>
                   </div>
                   <div className="mb-4">
@@ -423,7 +436,8 @@ export function JoinAsCounselorPage() {
                     <div>
                       <Label>Session fee (USD)</Label>
                       <input type="number" value={form.price} onChange={e => set('price', e.target.value)}
-                        placeholder="70" style={inputStyle()} />
+                        placeholder="70" style={inputStyle(errors.price)} />
+                      <Err msg={errors.price} />
                     </div>
                   </div>
                   <div className="mb-4">
@@ -435,7 +449,8 @@ export function JoinAsCounselorPage() {
                     <Label>Short bio</Label>
                     <textarea value={form.bio} onChange={e => set('bio', e.target.value)} rows={3}
                       placeholder="Tell clients about your approach…"
-                      style={{ ...inputStyle(), resize: 'none' }} />
+                      style={{ ...inputStyle(errors.bio), resize: 'none' }} />
+                    <Err msg={errors.bio} />
                   </div>
                 </motion.div>
               )}
@@ -474,6 +489,13 @@ export function JoinAsCounselorPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {stepError && (
+              <div className="mt-5 p-3 rounded-2xl"
+                style={{ background: 'rgba(217,119,87,0.09)', border: `1px solid ${CC.terracotta}55` }}>
+                <p style={{ fontSize: '0.83rem', color: CC.terracotta }}>{stepError}</p>
+              </div>
+            )}
 
             {/* Nav */}
             <div className="flex gap-3 mt-7">
