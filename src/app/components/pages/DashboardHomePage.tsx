@@ -52,6 +52,8 @@ export function DashboardHomePage() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [insights, setInsights] = useState<any[]>([]);
   const [recCounselors, setRecCounselors] = useState<any[]>([]);
+  const [journeyAreas, setJourneyAreas] = useState<any[]>([]);
+  const [journeyStats, setJourneyStats] = useState<any>(null);
 
   useEffect(() => {
     api.get('/mood/stats').then(res => {
@@ -64,20 +66,37 @@ export function DashboardHomePage() {
       setAppointments(res.data?.appointments || []);
     }).catch(() => {});
 
+    // Journey progress comes from the AI summary's real before/after by area.
+    api.get('/ai/summary').then(res => {
+      const d = res.data || {};
+      setJourneyAreas(d.growthComparison || []);
+      setJourneyStats({
+        sessionsCompleted: d.sessionsCompleted ?? 0,
+        totalSessions: d.totalSessions ?? 0,
+        growthScore: d.growthScore ?? 0,
+        daysTracked: d.daysTracked ?? 0,
+      });
+    }).catch(() => {});
+
     api.get('/ai/insights').then(res => {
       setInsights(res.data?.insights || []);
     }).catch(() => {});
 
-    api.get('/counselors').then(res => {
-      const list = res.data?.counselors || [];
-      setRecCounselors(list.slice(0, 2).map((c: any) => ({
-        id: c.id,
-        name: c.name,
-        specialty: c.specialty,
-        avatar: c.image,
-        match: Math.min(99, Math.round(c.rating * 17 + 14)),
-      })));
-    }).catch(() => {});
+    // The real matcher, not "the first two counselors in the list with a
+    // made-up percentage" (it was rating * 17 + 14).
+    // Real matching against this user's own concerns and mood tags. It used
+    // to be `list.slice(0, 2)` with a percentage invented from star rating
+    // (rating * 17 + 14), which was neither a match nor a recommendation.
+    api.get('/ai/recommended')
+      .then(res => {
+        setRecCounselors((res.data?.matches || []).slice(0, 2).map((m: any) => ({
+          id: m.id, name: m.name, specialty: m.specialty,
+          avatar: m.image || m.avatar,
+          match: m.match ?? null,
+          reason: m.reason || '',
+        })));
+      })
+      .catch(() => {});
   }, []);
 
   const logMood = async (val: number) => {
@@ -438,7 +457,7 @@ export function DashboardHomePage() {
                       className="px-2 py-0.5 rounded-full text-xs"
                       style={{ backgroundColor: `${CC.forestSage}15`, color: CC.forestSage, fontWeight: 600 }}
                     >
-                      {c.match}% match
+                      {c.match != null ? `${c.match}% match` : (c.reason || 'Suggested')}
                     </span>
                   </div>
                 </motion.div>
@@ -465,29 +484,52 @@ export function DashboardHomePage() {
             <h2 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: '1.05rem', color: CC.primaryText, marginBottom: 16 }}>
               Journey Progress
             </h2>
-            <div className="space-y-4">
-              {[
-                { label: 'Anxiety Management', value: Math.min(99, (weekAvg || 50)), color: CC.forestSage },
-                { label: 'Self Confidence', value: Math.min(99, Math.max(20, (weekAvg || 40) - 14)), color: CC.terracotta },
-                { label: 'Sleep Quality', value: Math.min(99, Math.max(30, (weekAvg || 60) + 10)), color: CC.darkForest },
-              ].map(item => (
-                <div key={item.label}>
-                  <div className="flex justify-between mb-1.5">
-                    <span style={{ fontSize: '0.8rem', color: CC.primaryText, fontWeight: 500 }}>{item.label}</span>
-                    <span style={{ fontSize: '0.8rem', color: item.color, fontWeight: 600 }}>{item.value}%</span>
-                  </div>
-                  <div className="w-full h-2 rounded-full" style={{ backgroundColor: CC.softSage }}>
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${item.value}%` }}
-                      transition={{ duration: 1, delay: 0.5, ease: 'easeOut' }}
-                      className="h-2 rounded-full"
-                      style={{ backgroundColor: item.color }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            {/* Real areas, from the life-context tags on your mood entries.
+                These used to be three fixed labels with values invented by
+                offsetting one weekly average by -14 and +10. */}
+            {!journeyAreas.length ? (
+              <p style={{ fontSize: '0.82rem', color: CC.mutedOlive, lineHeight: 1.7 }}>
+                {journeyStats && journeyStats.daysTracked > 0
+                  ? `${journeyStats.daysTracked} ${journeyStats.daysTracked === 1 ? 'entry' : 'entries'} logged. Add a few more — with tags like "work" or "sleep" — and your progress by area appears here.`
+                  : 'Log your mood a few times to see how each part of your life is trending.'}
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {journeyAreas.slice(0, 4).map((item: any, i: number) => {
+                  const delta = item.after - item.before;
+                  const color = [CC.forestSage, CC.terracotta, CC.darkForest, CC.mutedOlive][i % 4];
+                  return (
+                    <div key={item.area}>
+                      <div className="flex justify-between mb-1.5">
+                        <span style={{ fontSize: '0.8rem', color: CC.primaryText, fontWeight: 500 }}>{item.area}</span>
+                        <span style={{ fontSize: '0.8rem', color, fontWeight: 600 }}>
+                          {item.after}%
+                          {delta !== 0 && (
+                            <span style={{ fontSize: '0.72rem', color: delta > 0 ? CC.forestSage : CC.terracotta, marginLeft: 5 }}>
+                              {delta > 0 ? '+' : ''}{delta}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="w-full h-2 rounded-full relative" style={{ backgroundColor: CC.softSage }}>
+                        {/* Faint bar = where you started, solid = where you are */}
+                        <div style={{ position: 'absolute', inset: 0, width: `${item.before}%`, height: '100%', borderRadius: 4, backgroundColor: color, opacity: 0.28 }} />
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${item.after}%` }}
+                          transition={{ duration: 1, delay: 0.5, ease: 'easeOut' }}
+                          className="h-2 rounded-full relative"
+                          style={{ backgroundColor: color }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                <p style={{ fontSize: '0.7rem', color: CC.mutedOlive }}>
+                  Faded bar shows where you started.
+                </p>
+              </div>
+            )}
             <button
               onClick={() => navigate('/dashboard/journey')}
               className="mt-4 text-sm flex items-center gap-1"

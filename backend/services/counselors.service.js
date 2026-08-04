@@ -98,6 +98,12 @@ const toMinutes = (hhmm) => {
   const [h, m] = String(hhmm).split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
 };
+/** YYYY-MM-DD in the server's local zone. */
+const localKey = (d) => {
+  const off = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - off).toISOString().slice(0, 10);
+};
+
 const toLabel = (mins) => {
   const h24 = Math.floor(mins / 60);
   const m = mins % 60;
@@ -154,7 +160,10 @@ const getCounselorSlots = (counselorId, days = 14) => {
         date: day.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
         dayLabel: day.toLocaleDateString('en-US', { weekday: 'short' }),
         dayNum: day.getDate(),
-        iso: day.toISOString().slice(0, 10),
+        // Local date key, NOT toISOString(): for any timezone ahead of UTC
+        // that returns the PREVIOUS day, so the client looked up the wrong
+        // bucket and saw times that had already passed.
+        iso: localKey(day),
         slots,
         openCount: slots.filter(s => !s.booked).length,
       });

@@ -9,6 +9,7 @@ router.post('/match',
   [body('answers').isArray({ min: 1 }).withMessage('answers must be a non-empty array')],
   validate, ctrl.match
 );
+router.get('/recommended', ctrl.getRecommended);
 router.get('/insights', ctrl.getInsights);
 router.get('/summary', ctrl.getSummary);
 

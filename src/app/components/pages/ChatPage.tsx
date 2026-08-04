@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Search, MoreVertical, Phone, Video, Paperclip, Smile, Pin, Mic, Square } from 'lucide-react';
+import { Send, Search, Paperclip, Smile, Pin, Mic, Square } from 'lucide-react';
 import { CC } from '../../lib/colors';
 import { api } from '../../lib/api';
 import { ChatChannel, VoiceRecorder } from '../../lib/chatClient';
+import { getSocket } from '../../lib/callClient';
 
 const quickReplies = ["Feeling much better today! 😊", "Can we reschedule?", "I have a question", "Thank you!"];
 
@@ -21,6 +22,7 @@ export function ChatPage() {
   const [typing, setTyping] = useState(false);
   const [search, setSearch] = useState('');
   const [live, setLive] = useState(false);
+  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recSecs, setRecSecs] = useState(0);
@@ -82,6 +84,31 @@ export function ChatPage() {
 
   const peer = activeCon ? { id: activeCon.id, role: 'doctor' as const } : null;
 
+  /* Real presence over the socket — the same source the video lobby uses. */
+  useEffect(() => {
+    if (!conversations.length) return;
+    const sock = getSocket();
+
+    const refresh = () => {
+      sock.emit('presence:list',
+        { contacts: conversations.map((c: any) => ({ id: c.id, role: 'doctor' })) },
+        (res: any) => { if (res?.online) setOnlineIds(new Set(res.online)); });
+    };
+    const onPresence = ({ id, online }: any) => {
+      setOnlineIds(prev => {
+        const next = new Set(prev);
+        if (online) next.add(id); else next.delete(id);
+        return next;
+      });
+    };
+    sock.on('presence:update', onPresence);
+    refresh();
+    const poll = setInterval(refresh, 15000);
+    return () => { clearInterval(poll); sock.off('presence:update', onPresence); };
+  }, [conversations.length]);
+
+  const isOnline = (id: string) => onlineIds.has(id);
+
   // Scroll to bottom whenever messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -102,7 +129,10 @@ export function ChatPage() {
             id: c.id,
             name: c.name,
             avatar: c.image,
-            online: c.available,
+            // `available` is the counselor's "accepting new clients" flag —
+            // a profile setting, not presence. Showing it as "Online now"
+            // told people someone was there when they weren't.
+            acceptingClients: c.available,
             hasThread: !!t,
             lastMsg: t ? t.lastMsg : 'Start a conversation',
             time: t ? t.time : '',
@@ -295,7 +325,7 @@ export function ChatPage() {
                       <span style={{ fontWeight: 700 }}>{con.name[0]}</span>
                     </div>
                   )}
-                  {con.online && (
+                  {isOnline(con.id) && (
                     <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white" style={{ backgroundColor: '#22c55e' }} />
                   )}
                 </div>
@@ -326,29 +356,23 @@ export function ChatPage() {
           <div className="flex items-center gap-3">
             <div className="relative">
               <img src={activeCon.avatar} alt={activeCon.name} className="w-10 h-10 rounded-xl object-cover" />
-              {activeCon.online && (
+              {isOnline(activeCon.id) && (
                 <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white" style={{ backgroundColor: '#22c55e' }} />
               )}
             </div>
             <div>
               <p style={{ fontWeight: 700, color: CC.primaryText, fontSize: '0.95rem' }}>{activeCon.name}</p>
-              <p style={{ fontSize: '0.75rem', color: activeCon.online ? '#22c55e' : CC.mutedOlive }}>
-                {activeCon.online ? 'Online now' : 'Offline'}
+              <p style={{ fontSize: '0.75rem', color: isOnline(activeCon.id) ? '#22c55e' : CC.mutedOlive }}>
+                {isOnline(activeCon.id)
+                  ? 'Online now'
+                  : activeCon.acceptingClients ? 'Offline · usually replies within a day' : 'Offline'}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {[Phone, Video, MoreVertical].map((Icon, i) => (
-              <motion.button
-                key={i}
-                className="w-9 h-9 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: CC.softSage }}
-                whileHover={{ scale: 1.08, backgroundColor: `${CC.forestSage}15` }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Icon size={17} color={CC.primaryText} />
-              </motion.button>
-            ))}
+            {/* Call / video / overflow removed — none of them did anything,
+                and calling lives on the Video Sessions page where presence
+                and permissions are handled properly. */}
           </div>
         </div>
 

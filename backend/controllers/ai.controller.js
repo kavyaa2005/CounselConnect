@@ -12,6 +12,11 @@ const match = (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const getRecommended = (req, res, next) => {
+  try { return success(res, aiService.getRecommendedCounselors(req.user.id)); }
+  catch (err) { next(err); }
+};
+
 const getInsights = (req, res, next) => {
   try {
     const insights = aiService.getMoodInsights(req.user.id);
@@ -26,4 +31,4 @@ const getSummary = (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { match, getInsights, getSummary };
+module.exports = { match, getInsights, getSummary, getRecommended };

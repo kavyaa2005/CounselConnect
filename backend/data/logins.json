@@ -838,5 +838,37 @@
     "ip": "::1",
     "at": "2026-08-04T16:48:55.252Z",
     "status": "success"
+  },
+  {
+    "accountId": "d1",
+    "role": "doctor",
+    "device": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    "ip": "::1",
+    "at": "2026-08-04T17:23:48.313Z",
+    "status": "success"
+  },
+  {
+    "accountId": "a1",
+    "role": "admin",
+    "device": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
+    "ip": "::1",
+    "at": "2026-08-04T17:38:04.527Z",
+    "status": "success"
+  },
+  {
+    "accountId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "role": "user",
+    "device": "node",
+    "ip": "::ffff:127.0.0.1",
+    "at": "2026-08-04T18:05:39.602Z",
+    "status": "success"
+  },
+  {
+    "accountId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "role": "user",
+    "device": "node",
+    "ip": "::ffff:127.0.0.1",
+    "at": "2026-08-04T18:06:34.015Z",
+    "status": "success"
   }
 ]

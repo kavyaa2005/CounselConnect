@@ -9,6 +9,7 @@ import {
 import { CC } from '../lib/colors';
 import { useAuth } from '../context/AuthContext';
 import { isLoggedIn } from '../lib/auth';
+import { api } from '../lib/api';
 import { IncomingCallRinger } from './IncomingCallRinger';
 
 const sidebarGroups = [
@@ -63,6 +64,19 @@ export function DashboardLayout() {
   const mainRef = useRef<HTMLElement>(null);
   const displayName = user ? user.firstName + (user.lastName ? ' ' + user.lastName : '') : '{displayName}';
   const handleLogout = async () => { await logout(); navigate('/'); };
+
+  // Sessions completed + a real progress figure. Both were hardcoded here
+  // ("14 sessions completed", 82%) and never moved.
+  const [progress, setProgress] = useState<{ completed: number; total: number; score: number } | null>(null);
+  useEffect(() => {
+    api.get('/ai/summary')
+      .then(r => setProgress({
+        completed: r.data?.sessionsCompleted ?? 0,
+        total: r.data?.totalSessions ?? 0,
+        score: r.data?.growthScore ?? 0,
+      }))
+      .catch(() => {});
+  }, []);
 
   // Reset scroll whenever the route changes inside the dashboard
   useEffect(() => {
@@ -206,11 +220,17 @@ export function DashboardLayout() {
           {/* Session progress pill */}
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl mb-2" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}>
             <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#4ade80', flexShrink: 0 }} />
-            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.7rem', flex: 1 }}>14 sessions completed</p>
-            <span style={{ color: CC.terracotta, fontSize: '0.68rem', fontWeight: 600 }}>82%</span>
+            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.7rem', flex: 1 }}>
+              {progress
+                ? `${progress.completed} session${progress.completed === 1 ? '' : 's'} completed`
+                : 'Loading…'}
+            </p>
+            <span style={{ color: CC.terracotta, fontSize: '0.68rem', fontWeight: 600 }}>
+              {progress ? `${progress.score}%` : '—'}
+            </span>
           </div>
           <div className="w-full h-1 rounded-full mb-3 overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}>
-            <div style={{ width: '82%', height: '100%', background: `linear-gradient(90deg, ${CC.forestSage}, ${CC.terracotta})`, borderRadius: 4 }} />
+            <div style={{ width: `${progress?.score ?? 0}%`, height: '100%', background: `linear-gradient(90deg, ${CC.forestSage}, ${CC.terracotta})`, borderRadius: 4, transition: 'width 0.6s ease' }} />
           </div>
 
           {/* Crisis support — pinned, not buried in a menu.

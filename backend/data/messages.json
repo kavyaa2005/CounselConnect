@@ -111,7 +111,7 @@
         "time": "09:46 AM",
         "isMe": true,
         "read": true,
-        "readByDoctor": false,
+        "readByDoctor": true,
         "createdAt": "2026-08-04T04:16:56.974Z"
       }
     ],
