@@ -787,6 +787,102 @@ function streamMoodReport(res, { client, report }) {
     'Your personal mood record — CounselConnect. Share with your counselor if you find it useful.');
 }
 
+/**
+ * The counselor's patient list as a branded table.
+ *
+ * @param res      express response
+ * @param doctor   { name, title }
+ * @param patients rows already filtered to what the counselor is looking at
+ */
+function streamPatientList(res, { doctor, patients }) {
+  const { doc, left, contentW } = openDoc(res, {
+    title: `Patient list — ${doctor.name}`,
+    subtitle: 'Patient List',
+    filename: `patients-${slug(doctor.name)}-${new Date().toISOString().slice(0, 10)}.pdf`,
+    meta: `${doctor.name} · ${patients.length} patient${patients.length === 1 ? '' : 's'} · ${fmtDate(new Date().toISOString(), true)}`,
+  });
+
+  // Column widths as fractions of the content width, so the table scales with
+  // the page rather than being pinned to A4 point values.
+  const cols = [
+    { key: 'name',     label: 'Patient',   w: 0.24 },
+    { key: 'issue',    label: 'Concern',   w: 0.21 },
+    // 'Sessions' wrapped to "SESSIO / NS" at 0.10 — the heading needs the room
+    // even though the values are single digits.
+    { key: 'sessions', label: 'Sessions',  w: 0.13, align: 'right' },
+    { key: 'lastSeen', label: 'Last seen', w: 0.14 },
+    { key: 'next',     label: 'Next',      w: 0.17 },
+    { key: 'risk',     label: 'Risk',      w: 0.11 },
+  ];
+  const widths = cols.map(c => c.w * contentW);
+
+  const drawHeader = () => {
+    const y = doc.y;
+    doc.rect(left, y, contentW, 22).fill(BRAND.light);
+    let x = left;
+    cols.forEach((col, i) => {
+      doc.fontSize(7.5).font('Helvetica-Bold').fillColor(BRAND.muted)
+        .text(col.label.toUpperCase(), x + 6, y + 7,
+          { width: widths[i] - 12, align: col.align || 'left', lineBreak: false, characterSpacing: 0.5 });
+      x += widths[i];
+    });
+    doc.y = y + 28;
+  };
+
+  drawHeader();
+
+  if (!patients.length) {
+    doc.fontSize(10).font('Helvetica-Oblique').fillColor(BRAND.muted)
+      .text('No patients matched the current filters.', left, doc.y + 10, { width: contentW });
+  }
+
+  patients.forEach((p, idx) => {
+    // Start a fresh page — and repeat the column headings — before the row
+    // would otherwise be clipped by the footer band.
+    if (doc.y > doc.page.height - 110) {
+      doc.addPage();
+      doc.y = doc.page.margins.top;
+      drawHeader();
+    }
+
+    const y = doc.y;
+    if (idx % 2 === 1) doc.rect(left, y - 4, contentW, 22).fill('#FAFCFB');
+
+    const cells = [
+      p.name || '—',
+      p.issue || '—',
+      String(p.sessions ?? 0),
+      p.lastSeen || '—',
+      p.next || 'Not scheduled',
+      p.risk || '—',
+    ];
+
+    let x = left;
+    cells.forEach((text, i) => {
+      const isRisk = cols[i].key === 'risk';
+      const colour = isRisk
+        ? (p.risk === 'high' ? '#C0392B' : p.risk === 'medium' ? '#B7791F' : BRAND.sage)
+        : BRAND.text;
+      doc.fontSize(8.5).font(isRisk ? 'Helvetica-Bold' : 'Helvetica').fillColor(colour)
+        .text(isRisk ? String(text).toUpperCase() : text, x + 6, y,
+          { width: widths[i] - 12, align: cols[i].align || 'left', lineBreak: false, ellipsis: true });
+      x += widths[i];
+    });
+
+    // The email belongs with the name, one size down.
+    if (p.email) {
+      doc.fontSize(7).font('Helvetica').fillColor(BRAND.muted)
+        .text(p.email, left + 6, y + 10, { width: widths[0] - 12, lineBreak: false, ellipsis: true });
+    }
+
+    doc.y = y + 22;
+    doc.moveTo(left, doc.y - 3).lineTo(left + contentW, doc.y - 3).lineWidth(0.4).stroke(BRAND.border);
+  });
+
+  closeDoc(doc, left, contentW,
+    'Confidential — contains patient-identifiable information. Handle under your practice data policy.');
+}
+
 module.exports = {
   streamJournalSummary,
   streamAppointmentSummary,
@@ -794,4 +890,5 @@ module.exports = {
   streamPracticeReport,
   streamAppointmentDetails,
   streamMoodReport,
+  streamPatientList,
 };

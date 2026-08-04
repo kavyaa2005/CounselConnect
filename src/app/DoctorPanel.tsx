@@ -96,9 +96,21 @@ export function DoctorPanel() {
   if (user.role === 'admin') return <Navigate to="/admin" replace />;
   if (user.role !== 'doctor') return <Navigate to="/dashboard" replace />;
 
-  const handleNavigate = (page: string) => {
+  /* ── Cross-page focus ──
+     Some actions mean "go there and open THIS". The AI Assistant's alert
+     buttons are the clearest case: they were labelled View Patient, Send
+     Message and Add Note but all three ran onNavigate('patients'), so two of
+     the three took you somewhere unrelated to what the button said. A page id
+     alone can't express that, so navigation now carries an optional target. */
+  const [focus, setFocus] = useState<{ page: string; patientId?: string; patientName?: string } | null>(null);
+
+  const handleNavigate = (page: string, target?: { patientId?: string; patientName?: string }) => {
     setCurrentPage(page as Page);
+    setFocus(target ? { page, ...target } : null);
   };
+
+  /** The focus payload, but only for the page it was meant for. */
+  const focusFor = (page: string) => (focus && focus.page === page ? focus : undefined);
 
   // The chrome used to hide whenever the video PAGE was open, which stranded
   // you in the lobby with no sidebar and no way back. It should only go away
@@ -115,13 +127,13 @@ export function DoctorPanel() {
     switch (currentPage) {
       case 'dashboard': return <DashboardPage onNavigate={handleNavigate} />;
       case 'appointments': return <AppointmentsPage onNavigate={handleNavigate} />;
-      case 'patients': return <PatientsPage onNavigate={handleNavigate} />;
+      case 'patients': return <PatientsPage onNavigate={handleNavigate} focus={focusFor('patients')} />;
       case 'video': return <VideoSessionPage onNavigate={handleNavigate} onCallStateChange={setInCall} />;
-      case 'chat': return <ChatPage onNavigate={handleNavigate} />;
+      case 'chat': return <ChatPage onNavigate={handleNavigate} focus={focusFor('chat')} />;
       case 'ai': return <AIAssistantPage onNavigate={handleNavigate} />;
       case 'mood': return <MoodJourneyPage />;
       case 'journals': return <PatientJournalsPage />;
-      case 'notes': return <CounselingNotesPage />;
+      case 'notes': return <CounselingNotesPage focus={focusFor('notes')} />;
       case 'reports': return <ReportsPage />;
       case 'analytics': return <AnalyticsPage />;
       case 'availability': return <AvailabilityPage />;

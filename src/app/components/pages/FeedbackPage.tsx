@@ -234,6 +234,27 @@ export function FeedbackPage() {
                 "{f.comment}"
               </p>
             )}
+            {/* The counselor's reply. This block used to render `f.replies` —
+                an array initialised to [] when the review is created and never
+                appended to. The doctor's Reply to Review box writes `f.reply`,
+                so their response was stored correctly and then displayed
+                nowhere. */}
+            {f.reply && (
+              <div className="mt-3 p-3 rounded-xl" style={{ backgroundColor: CC.softSage }}>
+                <p style={{ fontSize: '0.72rem', fontWeight: 700, color: CC.forestSage, marginBottom: 3 }}>
+                  {f.replyBy || f.counselorName || 'Your counselor'} replied
+                  {f.repliedAt && (
+                    <span style={{ fontWeight: 500, color: CC.mutedOlive }}>
+                      {' · '}
+                      {new Date(f.repliedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  )}
+                </p>
+                <p style={{ fontSize: '0.82rem', color: CC.primaryText, lineHeight: 1.6 }}>{f.reply}</p>
+              </div>
+            )}
+
+            {/* Admin/moderation replies, kept separate from the counselor's. */}
             {f.replies?.length > 0 && f.replies.map((r: string, i: number) => (
               <div key={i} className="mt-3 p-3 rounded-xl" style={{ backgroundColor: CC.softSage }}>
                 <p style={{ fontSize: '0.72rem', fontWeight: 700, color: CC.forestSage, marginBottom: 3 }}>

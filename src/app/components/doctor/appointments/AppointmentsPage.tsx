@@ -21,10 +21,12 @@ const SESSION_COLORS = ['#6FAF8F', '#7C6FFF', '#F9A825', '#E91E8C'];
 
 interface ThreeDotsMenuProps {
   apptId: string;
+  /** Closed sessions only keep the actions that still mean something. */
+  status?: string;
   onAction: (action: string, id: string) => void;
 }
 
-function ThreeDotsMenu({ apptId, onAction }: ThreeDotsMenuProps) {
+function ThreeDotsMenu({ apptId, status, onAction }: ThreeDotsMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { c, sh } = useTheme();
@@ -53,12 +55,15 @@ function ThreeDotsMenu({ apptId, onAction }: ThreeDotsMenuProps) {
           background: c.white, borderRadius: 10, border: `1px solid ${c.border}`,
           boxShadow: sh.modal, zIndex: 200, overflow: 'hidden',
         }}>
-          {[
-            { label: 'Edit', action: 'edit' },
-            { label: 'Reschedule', action: 'reschedule' },
-            { label: 'Cancel', action: 'cancel' },
-            { label: 'Download Summary', action: 'download' },
-          ].map(item => (
+          {(['completed', 'cancelled', 'rejected'].includes(String(status))
+            ? [{ label: 'Download Summary', action: 'download' }]
+            : [
+                { label: 'Edit', action: 'edit' },
+                { label: 'Reschedule', action: 'reschedule' },
+                { label: 'Cancel', action: 'cancel' },
+                { label: 'Download Summary', action: 'download' },
+              ]
+          ).map(item => (
             <button
               key={item.action}
               onClick={(e) => { e.stopPropagation(); onAction(item.action, apptId); setOpen(false); }}
@@ -789,7 +794,7 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
                               </button>
                             </>
                           )}
-                          <ThreeDotsMenu apptId={appt.id} onAction={handleMenuAction} />
+                          <ThreeDotsMenu apptId={appt.id} status={appt.status} onAction={handleMenuAction} />
                         </div>
                       </td>
                     </tr>
@@ -1083,21 +1088,46 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
                 onSave={(d: string, t: string, st: string) => saveReschedule(selectedAppt.id, d, t, st)}
               />
             )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-              <button onClick={() => onNavigate('video')} style={{ width: '100%', padding: '10px', borderRadius: 11, border: 'none', background: c.primary, color: 'white', fontFamily: 'Inter', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                Join Video Session
-              </button>
-              <button onClick={() => downloadSummary(selectedAppt.id)} style={{ width: '100%', padding: '9px', borderRadius: 11, border: `1px solid ${c.border}`, background: 'transparent', color: c.textSecondary, fontFamily: 'Inter', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <Download size={13} /> Download Summary (PDF)
-              </button>
-              <button onClick={() => setRescheduling(rescheduling === selectedAppt.id ? null : selectedAppt.id)} style={{ width: '100%', padding: '9px', borderRadius: 11, border: `1px solid ${c.border}`, background: 'transparent', color: c.textSecondary, fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
-                {rescheduling === selectedAppt.id ? 'Close reschedule' : 'Reschedule'}
-              </button>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
-                <button onClick={() => { if (selected) updateStatus(selected, 'completed'); }} style={{ padding: '8px', borderRadius: 11, border: `1px solid ${c.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, cursor: 'pointer' }}>Mark Complete</button>
-                <button onClick={() => { if (selected) updateStatus(selected, 'cancelled'); setSelected(null); }} style={{ padding: '8px', borderRadius: 11, border: `1px solid ${c.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 12, color: c.error, cursor: 'pointer' }}>Cancel</button>
-              </div>
-            </div>
+            {/* A finished, cancelled or declined session is closed. This panel
+                used to offer Join / Mark Complete / Cancel on every one of
+                them, so you could "complete" an appointment that was already
+                complete, or cancel one the client cancelled last week. Only the
+                summary download still makes sense afterwards. */}
+            {(() => {
+              const closed = ['completed', 'cancelled', 'rejected'].includes(String(selectedAppt.status));
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {closed && (
+                    <div style={{ padding: '9px 12px', borderRadius: 11, background: c.background, border: `1px solid ${c.border}`, fontFamily: 'Inter', fontSize: 12, color: c.textMuted, textAlign: 'center' }}>
+                      {selectedAppt.status === 'completed' ? 'This session is complete.'
+                        : selectedAppt.status === 'rejected' ? 'This request was declined.'
+                        : 'This session was cancelled.'}
+                    </div>
+                  )}
+                  {!closed && selectedAppt.status === 'confirmed' && (
+                    <button onClick={() => onNavigate('video')} style={{ width: '100%', padding: '10px', borderRadius: 11, border: 'none', background: c.primary, color: 'white', fontFamily: 'Inter', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                      Join Video Session
+                    </button>
+                  )}
+                  <button onClick={() => downloadSummary(selectedAppt.id)} style={{ width: '100%', padding: '9px', borderRadius: 11, border: `1px solid ${c.border}`, background: 'transparent', color: c.textSecondary, fontFamily: 'Inter', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <Download size={13} /> Download Summary (PDF)
+                  </button>
+                  {!closed && (
+                    <>
+                      <button onClick={() => setRescheduling(rescheduling === selectedAppt.id ? null : selectedAppt.id)} style={{ width: '100%', padding: '9px', borderRadius: 11, border: `1px solid ${c.border}`, background: 'transparent', color: c.textSecondary, fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+                        {rescheduling === selectedAppt.id ? 'Close reschedule' : 'Reschedule'}
+                      </button>
+                      <div style={{ display: 'grid', gridTemplateColumns: selectedAppt.status === 'confirmed' ? '1fr 1fr' : '1fr', gap: 7 }}>
+                        {selectedAppt.status === 'confirmed' && (
+                          <button onClick={() => { if (selected) updateStatus(selected, 'completed'); }} style={{ padding: '8px', borderRadius: 11, border: `1px solid ${c.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 12, color: c.textSecondary, cursor: 'pointer' }}>Mark Complete</button>
+                        )}
+                        <button onClick={() => { if (selected) updateStatus(selected, 'cancelled'); setSelected(null); }} style={{ padding: '8px', borderRadius: 11, border: `1px solid ${c.border}`, background: 'transparent', fontFamily: 'Inter', fontSize: 12, color: c.error, cursor: 'pointer' }}>Cancel</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

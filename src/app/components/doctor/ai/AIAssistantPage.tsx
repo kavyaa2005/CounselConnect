@@ -18,7 +18,9 @@ const TECHNIQUE_LIBRARY = [
   { name: 'Self-Compassion Practice', icon: '💚', tags: ['self-esteem', 'grief', 'depression', 'burnout'], band: [0, 10], desc: 'Targets harsh self-criticism' },
 ];
 
-export function AIAssistantPage({ onNavigate }: { onNavigate: (page: string) => void }) {
+export function AIAssistantPage({ onNavigate }: {
+  onNavigate: (page: string, target?: { patientId?: string; patientName?: string }) => void;
+}) {
   const { c: colors, sh: shadows } = useTheme();
   const [patientList, setPatientList] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState('');
@@ -68,15 +70,18 @@ export function AIAssistantPage({ onNavigate }: { onNavigate: (page: string) => 
     ];
   }, [current]);
 
-  // Alerts generated from real mood + engagement data
+  // Alerts generated from real mood + engagement data. Each carries the page
+  // its button should actually open — the label and the destination used to
+  // disagree, because all three ran onNavigate('patients').
   const aiAlerts = useMemo(() => patientList.slice(0, 5).map((u: any) => {
+    const who = { patientId: u.id, patientName: u.name };
     if (u.avgMood != null && u.avgMood < 4) {
-      return { type: 'high', icon: '🔴', patient: u.name, alert: 'Low mood trend detected', desc: `Average mood ${u.avgMood}/10 across recent entries. Immediate attention recommended.`, action: 'View Patient' };
+      return { type: 'high', icon: '🔴', patient: u.name, alert: 'Low mood trend detected', desc: `Average mood ${u.avgMood}/10 across recent entries. Immediate attention recommended.`, action: 'View Patient', page: 'patients', who };
     }
     if (u.moodCount === 0) {
-      return { type: 'medium', icon: '🟡', patient: u.name, alert: 'No mood data logged', desc: 'Patient has not logged any moods yet. Consider encouraging daily tracking.', action: 'Send Message' };
+      return { type: 'medium', icon: '🟡', patient: u.name, alert: 'No mood data logged', desc: 'Patient has not logged any moods yet. Consider encouraging daily tracking.', action: 'Send Message', page: 'chat', who };
     }
-    return { type: 'low', icon: '🟢', patient: u.name, alert: 'Stable engagement', desc: `${u.moodCount} mood entr${u.moodCount === 1 ? 'y' : 'ies'} logged · avg ${u.avgMood}/10. Recommend positive reinforcement.`, action: 'Add Note' };
+    return { type: 'low', icon: '🟢', patient: u.name, alert: 'Stable engagement', desc: `${u.moodCount} mood entr${u.moodCount === 1 ? 'y' : 'ies'} logged · avg ${u.avgMood}/10. Recommend positive reinforcement.`, action: 'Add Note', page: 'notes', who };
   }), [patientList]);
 
   // Every answer is composed on the backend from this doctor's real records,
@@ -256,7 +261,8 @@ export function AIAssistantPage({ onNavigate }: { onNavigate: (page: string) => 
                   </div>
                 </div>
                 <button
-                  onClick={() => onNavigate('patients')}
+                  onClick={() => onNavigate(alert.page, alert.who)}
+                  title={`${alert.action} · ${alert.patient}`}
                   style={{ padding: '7px 14px', borderRadius: 10, border: `1px solid ${colors.border}`, background: colors.white, fontFamily: 'Inter', fontSize: 12, fontWeight: 600, color: colors.textSecondary, cursor: 'pointer', flexShrink: 0, marginLeft: 16 }}
                 >
                   {alert.action}
@@ -275,7 +281,11 @@ export function AIAssistantPage({ onNavigate }: { onNavigate: (page: string) => 
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {techniques.map((t, i) => (
-              <div key={i} style={{ padding: '14px', borderRadius: 14, background: colors.background, border: `1px solid ${colors.border}`, cursor: 'pointer', transition: 'all 0.2s' }}
+              // These cards showed a pointer cursor but did nothing when clicked.
+              <div key={i}
+                onClick={() => handleSend(`How would I use ${t.name} with ${selectedPatient}?`)}
+                title={`Ask about ${t.name}`}
+                style={{ padding: '14px', borderRadius: 14, background: colors.background, border: `1px solid ${colors.border}`, cursor: 'pointer', transition: 'all 0.2s' }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = colors.primary; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = colors.border; }}
               >

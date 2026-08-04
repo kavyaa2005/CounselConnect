@@ -80,6 +80,8 @@ router.put('/password', ctrl.changePassword);
 
 // Patients
 router.get('/patients', ctrl.getPatients);
+// Must sit above '/patients/:id', or Express matches "export" as an id.
+router.get('/patients/export', ctrl.exportPatients);
 router.get('/patients/:id', ctrl.getPatientDetail);
 router.get('/patients/:id/documents', ctrl.patientDocuments);
 

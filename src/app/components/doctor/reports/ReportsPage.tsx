@@ -29,8 +29,9 @@ export function ReportsPage() {
   const exportAs = async (fmt: string) => {
     setExporting(fmt);
     try {
-      // PDF renders a branded document; Excel and CSV share the CSV writer,
-      // which Excel opens natively.
+      // PDF renders a branded document; Excel uses the CSV writer, which Excel
+      // opens natively. (A separate "CSV" button was removed — it produced a
+      // byte-identical file to Excel, so it was two buttons for one export.)
       const query = fmt === 'PDF' ? 'pdf' : 'csv';
       await api.download(`/doctor/reports/export?format=${query}&period=${encodeURIComponent(period)}`);
       flash(`${fmt} report downloaded`);
@@ -48,13 +49,21 @@ export function ReportsPage() {
   }, []);
 
   // ── All report data computed from real records ──
-  const patientGrowth = analytics?.patientGrowth || [];
-  const revenueMonthly = (analytics?.revenue || []).map((r: any, i: number) => ({
-    ...r,
-    sessions: appointments.filter((a: any) => a.status !== 'cancelled' &&
-      new Date(a.dateTime).getMonth() === new Date(new Date().getFullYear(), new Date().getMonth() - (6 - i), 1).getMonth()).length,
-  }));
-  const recoveryRate = (analytics?.moodTrend || []).map((m: any) => ({ month: m.month, rate: m.avg != null ? m.avg * 10 : 0 }));
+  // How many trailing months the selected period covers. The dropdown used to
+  // change nothing on screen — it only travelled with the export — so the page
+  // read as static no matter what you picked.
+  const MONTHS_FOR: Record<string, number> = {
+    'This Month': 1, 'Last Month': 2, 'Last 3 Months': 3, 'This Year': 7, 'All Time': 7,
+  };
+  // Not named `window` — shadowing the global inside a component is a trap.
+  const monthsShown = MONTHS_FOR[period] ?? 7;
+  const tail = <T,>(arr: T[]): T[] => arr.slice(Math.max(0, arr.length - monthsShown));
+
+  const patientGrowth = tail(analytics?.patientGrowth || []);
+  // Session counts now arrive from the backend beside the revenue figure, keyed
+  // to year AND month. Deriving them here matched on month number alone.
+  const revenueMonthly = tail(analytics?.revenue || []);
+  const recoveryRate = tail((analytics?.moodTrend || []).map((m: any) => ({ month: m.month, rate: m.avg != null ? m.avg * 10 : 0 })));
 
   const issueDistribution = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -107,7 +116,7 @@ export function ReportsPage() {
             style={{ padding: '9px 16px', borderRadius: 12, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 13, color: colors.textPrimary, background: colors.white, outline: 'none', cursor: 'pointer' }}>
             {['This Month', 'Last Month', 'Last 3 Months', 'This Year', 'All Time'].map(o => <option key={o}>{o}</option>)}
           </select>
-          {['PDF', 'Excel', 'CSV'].map(fmt => (
+          {['PDF', 'Excel'].map(fmt => (
             <button
               key={fmt}
               onClick={() => exportAs(fmt)}
@@ -151,10 +160,15 @@ export function ReportsPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
               <h3 style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 700, color: colors.textPrimary, margin: 0 }}>Revenue & Sessions</h3>
-              <p style={{ fontFamily: 'Inter', fontSize: 12, color: colors.textMuted, margin: 0, marginTop: 2 }}>Monthly earnings breakdown</p>
+              <p style={{ fontFamily: 'Inter', fontSize: 12, color: colors.textMuted, margin: 0, marginTop: 2 }}>
+                {revenueMonthly.length} month{revenueMonthly.length === 1 ? '' : 's'} · {revenueMonthly.reduce((s: number, r: any) => s + Number(r.sessions || 0), 0)} billable session{revenueMonthly.reduce((s: number, r: any) => s + Number(r.sessions || 0), 0) === 1 ? '' : 's'}
+              </p>
             </div>
-            <div style={{ fontFamily: 'Inter', fontSize: 22, fontWeight: 800, color: '#7C6FFF' }}>
-              ${revenueMonthly.reduce((sum: number, r: any) => sum + Number(r.revenue || 0), 0).toLocaleString()}
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontFamily: 'Inter', fontSize: 22, fontWeight: 800, color: '#7C6FFF' }}>
+                ${revenueMonthly.reduce((sum: number, r: any) => sum + Number(r.revenue || 0), 0).toLocaleString()}
+              </div>
+              <div style={{ fontFamily: 'Inter', fontSize: 11, color: colors.textMuted }}>{period.toLowerCase()}</div>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={220}>

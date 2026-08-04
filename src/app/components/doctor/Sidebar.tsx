@@ -291,13 +291,17 @@ export function Sidebar({ currentPage, onNavigate, badges = {} }: SidebarProps) 
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    // Centred only on the collapsed rail. Expanded, this row is
+                    // full width, so centring pushed the icon and label into the
+                    // middle of the item and left a ragged left edge — every row
+                    // starting at a different x depending on its label length.
+                    justifyContent: collapsed ? 'center' : 'flex-start',
                     gap: 11,
                     overflow: 'hidden',
-                    // This was `flex: 1` unconditionally, so when collapsed the
-                    // icon sat at the LEFT of a full-width child even though
-                    // the button itself was centred. That was the main mess.
+                    // `flex: 1` when collapsed put the icon at the LEFT of a
+                    // full-width child even though the button itself was centred.
                     flex: collapsed ? '0 0 auto' : 1,
+                    minWidth: 0,
                   }}>
                     <Icon
                       size={18}
@@ -378,7 +382,8 @@ export function Sidebar({ currentPage, onNavigate, badges = {} }: SidebarProps) 
             gap: 10,
             cursor: 'pointer',
             transition: 'background 0.15s',
-            justifyContent: 'center',
+            // Same fix as the nav rows: centre only on the collapsed rail.
+            justifyContent: collapsed ? 'center' : 'flex-start',
             boxSizing: 'border-box',
           }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = c.veryLightSage; }}

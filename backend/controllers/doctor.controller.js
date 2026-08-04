@@ -47,6 +47,40 @@ const updateProfile = wrap((req, res) => success(res, { profile: doctorService.u
 const getPatients = wrap((req, res) => success(res, { patients: doctorService.getPatients(req.user.id) }));
 const getPatientDetail = wrap((req, res) => success(res, { patient: doctorService.getPatientDetail(req.user.id, req.params.id) }));
 
+/**
+ * Patient list as a PDF.
+ *
+ * `ids` narrows the export to exactly what the counselor has on screen after
+ * searching and filtering — but it is intersected with their own caseload, so
+ * passing someone else's patient id can't widen access.
+ */
+const exportPatients = wrap((req, res) => {
+  const profile = doctorService.getProfile(req.user.id);
+  const all = doctorService.getPatients(req.user.id);
+
+  const wanted = String(req.query.ids || '').split(',').map(s => s.trim()).filter(Boolean);
+  const chosen = wanted.length ? all.filter(p => wanted.includes(p.id)) : all;
+
+  const risk = (avg) => (avg == null ? 'medium' : avg >= 6.5 ? 'low' : avg >= 4 ? 'medium' : 'high');
+  const rows = chosen.map(p => ({
+    name: p.name,
+    email: p.email,
+    issue: p.reason || 'General wellbeing',
+    sessions: p.appointmentCount,
+    lastSeen: p.lastMood?.createdAt
+      ? new Date(p.lastMood.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : '—',
+    next: p.upcomingAppointment ? `${p.upcomingAppointment.date}, ${p.upcomingAppointment.time}` : 'Not scheduled',
+    risk: risk(p.avgMood),
+  }));
+
+  const { streamPatientList } = require('../services/pdf.service');
+  return streamPatientList(res, {
+    doctor: { name: profile.name, title: profile.specialty || 'Counselor' },
+    patients: rows,
+  });
+});
+
 const getAppointments = wrap((req, res) => success(res, { appointments: doctorService.getAppointments(req.user.id) }));
 const updateAppointment = wrap((req, res) => success(res, { appointment: doctorService.updateAppointment(req.user.id, req.params.id, req.body) }, 'Appointment updated'));
 
@@ -296,7 +330,7 @@ module.exports = {
   getProfile, updateProfile, getLogins,
   getSettings, updateSettings, changePassword,
   getJournalOverview, getPatientJournal, downloadJournalPdf,
-  getPatients, getPatientDetail,
+  getPatients, getPatientDetail, exportPatients,
   getAppointments, updateAppointment,
   getAvailability, updateAvailability,
   getNotes, createNote, updateNote, deleteNote,

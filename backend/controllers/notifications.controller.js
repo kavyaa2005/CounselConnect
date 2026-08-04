@@ -82,6 +82,22 @@ const getNotifications = (req, res, next) => {
       }
     });
 
+    /* A counselor replying to your review is an event you should hear about.
+       The reply was being written to feedback.json and then read by nobody:
+       no notification, and the client's own Feedback page rendered `replies`
+       (an array that is never appended to) rather than `reply`. */
+    readStore('feedback.json')
+      .filter(f => f.userId === userId && f.reply)
+      .forEach(f => {
+        items.push({
+          id: `feedback-reply-${f.id}`,
+          type: 'message',
+          title: `${f.replyBy || f.counselorName || 'Your counselor'} replied to your review`,
+          text: String(f.reply).slice(0, 120),
+          at: f.repliedAt || f.createdAt,
+        });
+      });
+
     const notifications = items
       .sort((a, b) => new Date(b.at) - new Date(a.at))
       .slice(0, 30)

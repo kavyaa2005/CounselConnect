@@ -60,6 +60,13 @@ Updated as work lands. Admin section pending the spec.
 - **Share files with a patient**: upload from their card, explicit share/private flag, note attached, unshare any time
 - **Real TOTP two-factor** (RFC 6238, verified against the reference vectors): QR enrolment, recovery codes, login challenge, password-confirmed disable
 - **Dark mode persists** to the account
+- **Patients: export the list** (CSV client-side, branded PDF from the backend), risk filter, and the dead "Add Patient" button removed
+- **Availability actually governs booking**: Add Slot works, vacation mode and break time are enforced, auto-reject declines out-of-hours requests
+- **Analytics is honest**: hardcoded 93% retention, "peak 10 AM / 2–3 PM" and "busiest Thursday" captions all replaced with computed values; the fabricated flat "Treatment Outcomes" chart replaced by a real caseload mood series; range selector wired up
+- **Reports**: duplicate CSV button removed, period selector now filters the charts, session counts year-scoped
+- **Messages**: real socket presence (was `online: true` on every thread); call / video / overflow icons removed
+- **AI Assistant** alert buttons route to where their label says, carrying the patient
+- **Feedback replies reach the client** — with a notification
 
 ### Not done
 | # | Item | Notes |
@@ -95,6 +102,7 @@ _Full gap analysis still awaiting the Admin functionality spec._
 
 | # | Item | Notes |
 |---|---|---|
+| X0 | **Every upload in the app was broken** — FIXED | `api.upload` sent `Content-Type: application/json` alongside a FormData body, so no multipart boundary was generated and multer never saw a file. Documents, chat attachments, profile photos and patient file sharing all failed with "No file was uploaded". One line in `api.ts`. |
 | X1 | **No TypeScript checking** | No `tsconfig.json`, TypeScript not installed. `Record<Page, PageMeta>` was pure decoration — that's exactly how the admin-shell crash slipped through. A `typecheck` script would catch this class of bug. Adding it will likely surface pre-existing errors. |
 | X2 | **Email delivery** | Password reset works end to end but the code is delivered to the server console in development. `deliver()` in `passwordReset.service.js` is the single seam for a real mailer. Still needed for U4 (email verification). |
 | X3 | **2FA is available but not enforced** | Any account can enable it; nothing requires it. A policy (e.g. mandatory for counselors) would be a product decision. |

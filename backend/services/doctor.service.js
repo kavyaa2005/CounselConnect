@@ -422,7 +422,15 @@ const getAnalytics = (doctorId) => {
       : null;
     moodTrend.push({ month: MONTH_NAMES[d.getMonth()], avg });
     const monthAppts = appointments.filter(a => (a.dateTime || '').slice(0, 7) === key && a.status !== 'cancelled');
-    revenue.push({ month: MONTH_NAMES[d.getMonth()], revenue: monthAppts.reduce((s, a) => s + (a.price || 0), 0) });
+    revenue.push({
+      month: MONTH_NAMES[d.getMonth()],
+      // The year matters. The Reports page used to derive the session count on
+      // the client by matching getMonth() alone, so last year's March was
+      // counted into this year's March bar.
+      key,
+      revenue: monthAppts.reduce((s, a) => s + (a.price || 0), 0),
+      sessions: monthAppts.length,
+    });
     patientGrowth.push({
       month: MONTH_NAMES[d.getMonth()],
       patients: users.filter(u => (u.createdAt || '') <= `${key}-31T23:59:59Z`).length,

@@ -1,5 +1,5 @@
 const { readStore } = require('../utils/fileStore.utils');
-const { DEFAULT_AVAILABILITY } = require('./availability.defaults');
+const availabilityService = require('./availability.service');
 
 // Counselor cards are derived from real doctor accounts (doctors.json).
 // This keeps the user panel and the doctor panel in sync — every counselor
@@ -124,7 +124,12 @@ const getCounselorSlots = (counselorId, days = 14) => {
   const doctor = readStore('doctors.json').find(d => d.counselorId === counselorId);
   if (!doctor) throw Object.assign(new Error('Counselor not found'), { statusCode: 404 });
 
-  const availability = { ...DEFAULT_AVAILABILITY, ...(doctor.availability || {}) };
+  // The counselor's OWN saved schedule. This used to read `doctor.availability`
+  // — which is the seed string 'Mon–Fri', not an object — so spreading it just
+  // produced junk index keys over the defaults and every counselor offered the
+  // same 9–5 no matter what they set on their Availability page.
+  const availability = availabilityService.scheduleFor(doctor.id);
+  const settings = availabilityService.settingsFor(doctor.id);
 
   const taken = new Set(
     readStore('appointments.json')
@@ -137,6 +142,10 @@ const getCounselorSlots = (counselorId, days = 14) => {
 
   for (let i = 0; i < days; i++) {
     const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+
+    // Vacation days are simply not offered.
+    if (availabilityService.onVacation(settings, day)) continue;
+
     const rule = availability[DAY_KEYS[day.getDay()]];
     if (!rule || rule.enabled === false) continue;
 
@@ -145,8 +154,10 @@ const getCounselorSlots = (counselorId, days = 14) => {
       for (let m = toMinutes(start); m + SLOT_MINUTES <= toMinutes(end); m += SLOT_MINUTES) {
         const at = new Date(day);
         at.setHours(Math.floor(m / 60), m % 60, 0, 0);
-        // Skip anything already gone, and anything already booked
+        // Skip anything already gone, anything inside the counselor's break,
+        // and mark anything already booked.
         if (at <= now) continue;
+        if (availabilityService.inBreak(settings, m, m + SLOT_MINUTES)) continue;
         slots.push({
           time: toLabel(m),
           iso: at.toISOString(),

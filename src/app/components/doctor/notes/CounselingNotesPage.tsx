@@ -23,7 +23,10 @@ const mapNote = (n: any) => ({
   aiGenerated: !!n.aiSummary,
 });
 
-export function CounselingNotesPage() {
+export function CounselingNotesPage({ focus }: {
+  /** Set when another page said "write a note about this patient". */
+  focus?: { patientId?: string; patientName?: string };
+} = {}) {
   const { c, sh } = useTheme();
   const [notesData, setNotesData] = useState<any[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -67,20 +70,34 @@ export function CounselingNotesPage() {
     ...SUGGESTED_TAGS,
   ]))];
 
-  const createNote = async () => {
+  const createNote = async (forPatient?: { id?: string; name?: string }) => {
     try {
-      const res = await api.post('/doctor/notes', { title: 'New note', content: '' });
+      const title = forPatient?.name ? `Note — ${forPatient.name}` : 'New note';
+      const res = await api.post('/doctor/notes', {
+        title, content: '', patientId: forPatient?.id || null,
+      });
       const note = mapNote(res.data.note);
       setNotesData(prev => [note, ...prev]);
       setSelected(note.id);
       setEditTitle(note.title);
       setEditContent(note.content);
       setEditTags([]);
-      setEditPatient('');
+      setEditPatient(forPatient?.id || '');
       setEditShared(false);
       setIsEditing(true);
     } catch (e: any) { flash(e.message || 'Could not create the note', true); }
   };
+
+  /* Arriving from another page's "Add Note" opens a fresh note already
+     attached to that patient, rather than dumping you on the notes list.
+     The ref guard stops React 18's double-invoked effects (and any later
+     re-render) from creating two blank notes. */
+  const seeded = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focus?.patientId || seeded.current === focus.patientId) return;
+    seeded.current = focus.patientId;
+    createNote({ id: focus.patientId, name: focus.patientName });
+  }, [focus?.patientId, focus?.patientName]);
 
   const saveNote = async () => {
     if (!selected) return;
@@ -265,7 +282,9 @@ export function CounselingNotesPage() {
         <div style={{ padding: '20px 18px 14px', borderBottom: `1px solid ${c.border}` }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <h2 style={{ fontFamily: 'Inter', fontSize: 17, fontWeight: 700, color: c.textPrimary, margin: 0 }}>Notes</h2>
-            <button onClick={createNote} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 9, border: 'none', background: c.primary, color: 'white', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+            {/* Wrapped, not passed by reference — onClick would hand the
+                click event straight into the `forPatient` parameter. */}
+            <button onClick={() => createNote()} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 9, border: 'none', background: c.primary, color: 'white', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
               <Plus size={13} /> New Note
             </button>
           </div>

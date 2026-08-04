@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { readStore, writeStore } = require('../utils/fileStore.utils');
+const availabilityService = require('./availability.service');
 
 const getAppointments = (userId) => {
   const appointments = readStore('appointments.json');
@@ -38,6 +39,27 @@ const bookAppointment = (userId, {
 
   const when = assertSlotIsFree(counselorId, `${date} ${time}`);
 
+  /* ── Vacation mode and auto-reject ──
+     Both were switches on the counselor's Availability page that saved happily
+     and were then read by nothing, so a counselor could be "on vacation" and
+     still take bookings. Vacation always blocks. Auto-reject is the counselor's
+     choice about out-of-hours requests: on, they're declined immediately with a
+     reason; off, they still land in the queue for a human decision. */
+  const bookable = availabilityService.checkBookable(counselorId, when);
+  const settings = (() => {
+    const d = availabilityService.doctorFor(counselorId);
+    return d ? availabilityService.settingsFor(d.id) : {};
+  })();
+
+  if (!bookable.ok) {
+    const isVacation = settings.vacationMode && availabilityService.onVacation(settings, when);
+    if (isVacation || settings.autoReject) {
+      throw Object.assign(new Error(bookable.reason), { statusCode: 409, autoRejected: true });
+    }
+    // Auto-reject off: allow it through, but record why it was unusual so the
+    // counselor sees the flag on the request in their queue.
+  }
+
   const appt = {
     id: uuidv4(),
     userId,
@@ -61,6 +83,9 @@ const bookAppointment = (userId, {
     // this is the step the whole doctor-side Accept/Reject UI was built for
     // but which nothing was ever creating.
     status: 'pending', // pending | confirmed | rejected | cancelled | completed
+    // Flagged when the request sits outside the counselor's stated hours and
+    // they've chosen to review those by hand rather than auto-decline.
+    outsideHours: bookable.ok ? null : bookable.reason,
     // Nothing is charged until the counselor accepts.
     paymentStatus: 'unpaid', // unpaid | paid | refunded
     createdAt: new Date().toISOString(),

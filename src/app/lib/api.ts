@@ -16,6 +16,15 @@ const request = async <T = any>(
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
+  // A FormData body MUST NOT carry a hand-written Content-Type. The browser
+  // generates `multipart/form-data; boundary=…` itself, and the boundary is
+  // the only thing that tells the server where each part begins. Sending
+  // 'application/json' here (the default above) meant multer saw a body it
+  // could not parse, `req.file` was always undefined, and every upload in the
+  // app came back "No file was uploaded" — documents, chat attachments,
+  // profile photos and patient file sharing alike.
+  if (options.body instanceof FormData) delete headers['Content-Type'];
+
   const res = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,
     headers,

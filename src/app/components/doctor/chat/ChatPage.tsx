@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Send, Paperclip, Smile, Phone, Video, MoreVertical, Circle } from 'lucide-react';
+import { Search, Send, Paperclip, Smile, Download } from 'lucide-react';
 import { useTheme } from '../ThemeContext';
 import { api } from '../../../lib/api';
+import { getSocket } from '../../../lib/callClient';
 import { ChatChannel } from '../../../lib/chatClient';
 
-export function ChatPage({ onNavigate }: { onNavigate: (page: string) => void }) {
+export function ChatPage({ onNavigate, focus }: {
+  onNavigate: (page: string, target?: { patientId?: string; patientName?: string }) => void;
+  /** Set when another page said "message this patient". */
+  focus?: { patientId?: string; patientName?: string };
+}) {
   const { c: colors, sh: shadows } = useTheme();
   const [conversations, setConversations] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
@@ -12,16 +17,16 @@ export function ChatPage({ onNavigate }: { onNavigate: (page: string) => void })
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
   const [peerTyping, setPeerTyping] = useState(false);
   const [live, setLive] = useState(false);
+  /** Who is genuinely connected right now, from the signalling server. */
+  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
   const chatRef = useRef<ChatChannel | null>(null);
   const selectedRef = useRef<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
 
   const flash = (text: string, bad = false) => {
@@ -58,16 +63,15 @@ export function ChatPage({ onNavigate }: { onNavigate: (page: string) => void })
     return () => { ch.destroy(); chatRef.current = null; };
   }, []);
 
-  // Close the overflow menu / emoji tray on an outside click
+  // Close the emoji tray on an outside click
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (menuRef.current && !menuRef.current.contains(t)) setShowMenu(false);
       if (emojiRef.current && !emojiRef.current.contains(t)) setShowEmoji(false);
     };
-    if (showMenu || showEmoji) document.addEventListener('mousedown', onDown);
+    if (showEmoji) document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [showMenu, showEmoji]);
+  }, [showEmoji]);
 
   // Real patient conversations (refreshes every 5s)
   useEffect(() => {
@@ -79,19 +83,30 @@ export function ChatPage({ onNavigate }: { onNavigate: (page: string) => void })
         time: t.time,
         unread: t.unread,
         hasThread: !!t.hasThread,
-        online: true,
         avatar: (t.patient?.name || 'P').split(' ').map((n: string) => n[0]).join('').toUpperCase(),
       }));
       setConversations(list);
       // Prefer opening a live thread; fall back to the first patient so the
       // doctor can always start a conversation rather than staring at an
       // empty pane until the patient writes first.
-      setSelected(prev => prev || list.find((x: any) => x.hasThread)?.id || list[0]?.id || null);
+      // An explicit target wins over "whatever thread was open" — arriving
+      // from an AI alert's Send Message should land on THAT patient.
+      setSelected(prev =>
+        prev
+        || (focus?.patientId && list.some((x: any) => x.id === focus.patientId) ? focus.patientId : null)
+        || list.find((x: any) => x.hasThread)?.id
+        || list[0]?.id
+        || null);
     }).catch(() => {});
     load();
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [focus?.patientId]);
+
+  // If the panel is already mounted when the target changes, follow it.
+  useEffect(() => {
+    if (focus?.patientId) setSelected(focus.patientId);
+  }, [focus?.patientId]);
 
   // Message history for the selected patient (polls for new messages)
   useEffect(() => {
@@ -111,6 +126,38 @@ export function ChatPage({ onNavigate }: { onNavigate: (page: string) => void })
     const interval = setInterval(load, live ? 20000 : 5000);
     return () => clearInterval(interval);
   }, [selected, live]);
+
+  /* ── Real presence ──
+     Every conversation used to carry a literal `online: true`, so the green
+     dot and the "● Online" line under the patient's name were permanent
+     decoration. This asks the signalling server who is actually connected —
+     the same source the video lobby uses — and updates live. */
+  useEffect(() => {
+    if (!conversations.length) return;
+    const sock = getSocket();
+
+    const refresh = () => {
+      sock.emit('presence:list',
+        { contacts: conversations.map(cv => ({ id: cv.id, role: 'user' })) },
+        (res: any) => { if (res?.online) setOnlineIds(new Set(res.online)); });
+    };
+    const onUpdate = ({ id, online }: any) => {
+      setOnlineIds(prev => {
+        const next = new Set(prev);
+        if (online) next.add(id); else next.delete(id);
+        return next;
+      });
+    };
+
+    sock.on('presence:update', onUpdate);
+    refresh();
+    const poll = setInterval(refresh, 15000);
+    return () => { clearInterval(poll); sock.off('presence:update', onUpdate); };
+    // Only the set of ids matters — re-subscribing on every unread bump would
+    // tear the listener down five times a minute.
+  }, [conversations.map(cv => cv.id).sort().join(',')]);
+
+  const isOnline = (id: string) => onlineIds.has(id);
 
   const sendMessage = async () => {
     const text = input.trim();
@@ -176,7 +223,6 @@ export function ChatPage({ onNavigate }: { onNavigate: (page: string) => void })
     a.download = `conversation-${selectedConv.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.txt`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 30_000);
-    setShowMenu(false);
     flash('Transcript downloaded');
   };
 
@@ -236,7 +282,7 @@ export function ChatPage({ onNavigate }: { onNavigate: (page: string) => void })
                 <div style={{ width: 44, height: 44, borderRadius: '50%', background: `linear-gradient(135deg, ${colors.primary}, ${colors.lightSage})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 13 }}>
                   {conv.avatar}
                 </div>
-                {conv.online && (
+                {isOnline(conv.id) && (
                   <div style={{ position: 'absolute', bottom: 1, right: 1, width: 10, height: 10, borderRadius: '50%', background: colors.success, border: '2px solid white' }} />
                 )}
               </div>
@@ -283,50 +329,24 @@ export function ChatPage({ onNavigate }: { onNavigate: (page: string) => void })
                   <div style={{ width: 40, height: 40, borderRadius: '50%', background: `linear-gradient(135deg, ${colors.primary}, ${colors.lightSage})`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 13 }}>
                     {selectedConv.avatar}
                   </div>
-                  {selectedConv.online && <div style={{ position: 'absolute', bottom: 1, right: 1, width: 9, height: 9, borderRadius: '50%', background: colors.success, border: '2px solid white' }} />}
+                  {isOnline(selectedConv.id) && <div style={{ position: 'absolute', bottom: 1, right: 1, width: 9, height: 9, borderRadius: '50%', background: colors.success, border: '2px solid white' }} />}
                 </div>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 14, color: colors.textPrimary }}>{selectedConv.name}</div>
-                  <div style={{ fontSize: 12, color: selectedConv.online ? colors.success : colors.textMuted }}>
-                    {selectedConv.online ? '● Online' : '○ Offline'}
+                  <div style={{ fontSize: 12, color: isOnline(selectedConv.id) ? colors.success : colors.textMuted }}>
+                    {isOnline(selectedConv.id) ? '● Online' : '○ Offline'}
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => onNavigate('video')} style={{ width: 36, height: 36, borderRadius: 10, border: `1px solid ${colors.border}`, background: colors.white, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textSecondary }}>
-                  <Video size={16} />
-                </button>
-                <button onClick={() => onNavigate('video')} title="Start a call" style={{ width: 36, height: 36, borderRadius: 10, border: `1px solid ${colors.border}`, background: colors.white, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textSecondary }}>
-                  <Phone size={16} />
-                </button>
-                <div ref={menuRef} style={{ position: 'relative' }}>
-                  <button onClick={() => setShowMenu(m => !m)} title="More" style={{ width: 36, height: 36, borderRadius: 10, border: `1px solid ${colors.border}`, background: colors.white, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textSecondary }}>
-                    <MoreVertical size={16} />
-                  </button>
-                  {showMenu && (
-                    <div style={{
-                      position: 'absolute', right: 0, top: 42, width: 210, zIndex: 200,
-                      background: colors.white, borderRadius: 12, border: `1px solid ${colors.border}`,
-                      boxShadow: shadows.modal, overflow: 'hidden',
-                    }}>
-                      {[
-                        { label: 'View patient record', run: () => { setShowMenu(false); onNavigate('patients'); } },
-                        { label: 'Start video session', run: () => { setShowMenu(false); onNavigate('video'); } },
-                        { label: 'Open their journals', run: () => { setShowMenu(false); onNavigate('journals'); } },
-                        { label: 'Write a note', run: () => { setShowMenu(false); onNavigate('notes'); } },
-                        { label: 'Export transcript', run: exportConversation },
-                      ].map(item => (
-                        <button key={item.label} onClick={item.run}
-                          style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', fontFamily: 'Inter', fontSize: 13, color: colors.textPrimary, cursor: 'pointer', textAlign: 'left', display: 'block' }}
-                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = colors.veryLightSage; }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}>
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+              {/* The call, video-call and overflow icons that used to sit here
+                  are gone. The two call buttons only opened the Video Sessions
+                  lobby — they never dialled this patient — and the overflow menu
+                  duplicated the sidebar. Transcript export was the one thing
+                  worth keeping, so it stays as a plain labelled button. */}
+              <button onClick={exportConversation} title="Save this thread as a text file"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', borderRadius: 10, border: `1px solid ${colors.border}`, background: colors.white, fontFamily: 'Inter', fontSize: 12, color: colors.textSecondary, cursor: 'pointer' }}>
+                <Download size={13} /> Export transcript
+              </button>
             </div>
 
             {/* Messages */}

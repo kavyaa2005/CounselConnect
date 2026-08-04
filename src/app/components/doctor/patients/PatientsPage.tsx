@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Filter, Plus, Phone, Mail, FileText, X, BookOpen, Lock, Upload, Trash2 } from 'lucide-react';
+import { Search, Filter, Download, Phone, Mail, FileText, X, BookOpen, Lock, Upload, Trash2 } from 'lucide-react';
 import { useTheme } from '../ThemeContext';
 import { api } from '../../../lib/api';
 
@@ -49,10 +49,17 @@ const timeAgo = (iso?: string) => {
   return w === 1 ? '1 week ago' : `${w} weeks ago`;
 };
 
-export function PatientsPage({ onNavigate }: { onNavigate: (page: string) => void }) {
+export function PatientsPage({ onNavigate, focus }: {
+  onNavigate: (page: string, target?: { patientId?: string; patientName?: string }) => void;
+  /** Set when another page said "open this patient" (e.g. an AI alert). */
+  focus?: { patientId?: string; patientName?: string };
+}) {
   const { c, sh } = useTheme();
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(focus?.patientId || null);
+  const [riskFilter, setRiskFilter] = useState('all');
+  const [exporting, setExporting] = useState('');
+  const [showFilter, setShowFilter] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [activeTab, setActiveTab] = useState('overview');
   const [patients, setPatients] = useState<any[]>([]);
@@ -162,12 +169,55 @@ export function PatientsPage({ onNavigate }: { onNavigate: (page: string) => voi
     score: m.value * 2,
   }));
 
+  // Arriving here from another page's "View Patient" opens that record.
+  useEffect(() => {
+    if (focus?.patientId) setSelected(focus.patientId);
+  }, [focus?.patientId]);
+
   const filtered = patients.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.issue.toLowerCase().includes(search.toLowerCase())
+    (p.name.toLowerCase().includes(search.toLowerCase()) ||
+     p.issue.toLowerCase().includes(search.toLowerCase())) &&
+    (riskFilter === 'all' || p.riskLevel === riskFilter)
   );
 
   const selectedPatient = patients.find(p => p.id === selected);
+
+  /**
+   * Exports the patient list the counselor is currently looking at — search
+   * and risk filter included, so what downloads matches what's on screen.
+   * CSV is written client-side from data already loaded; the PDF is rendered
+   * by the backend so it carries the same branding as the other exports.
+   */
+  const exportList = async (fmt: 'csv' | 'pdf') => {
+    if (!filtered.length) return;
+    setExporting(fmt);
+    try {
+      if (fmt === 'pdf') {
+        const ids = filtered.map(p => p.id).join(',');
+        await api.download(`/doctor/patients/export?format=pdf&ids=${encodeURIComponent(ids)}`);
+      } else {
+        const cell = (v: any) => {
+          const s = String(v ?? '');
+          // Quote anything containing a delimiter, quote or newline, and
+          // double any embedded quotes — otherwise a patient whose reason
+          // contains a comma shifts every later column.
+          return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        };
+        const header = ['Name', 'Email', 'Phone', 'Concern', 'Sessions', 'Last activity', 'Next appointment', 'Avg mood %', 'Risk'];
+        const rows = filtered.map(p => [p.name, p.email, p.phone, p.issue, p.sessions, p.lastVisit, p.nextAppt, p.progress, p.riskLevel]);
+        // BOM so Excel opens UTF-8 names correctly rather than as mojibake.
+        const csv = '﻿' + [header, ...rows].map(r => r.map(cell).join(',')).join('\r\n');
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `patients-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      }
+    } catch (e: any) {
+      flashFile(e.message || 'Export failed', true);
+    } finally { setExporting(''); }
+  };
 
   return (
     <div style={{ padding: '28px', fontFamily: 'Inter', display: 'flex', gap: 24, height: '100%', boxSizing: 'border-box' }}>
@@ -186,9 +236,28 @@ export function PatientsPage({ onNavigate }: { onNavigate: (page: string) => voi
               </button>
             ))}
           </div>
-          <button style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, border: 'none', background: c.primary, color: 'white', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            <Plus size={15} /> Add Patient
-          </button>
+          {/* Replaces an "Add Patient" button that had no onClick and could
+              never have one: a counselor doesn't create patient accounts —
+              people register themselves and appear here once they book. */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ fontFamily: 'Inter', fontSize: 12, color: c.textMuted }}>
+              {filtered.length} of {patients.length}
+            </span>
+            <button
+              onClick={() => exportList('csv')}
+              disabled={!filtered.length || !!exporting}
+              title={filtered.length ? 'Download this list as CSV' : 'Nothing to export'}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 10, border: `1px solid ${c.border}`, background: c.white, color: c.textSecondary, fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: filtered.length && !exporting ? 'pointer' : 'not-allowed', opacity: filtered.length ? 1 : 0.5 }}>
+              <Download size={14} /> {exporting === 'csv' ? 'Preparing…' : 'CSV'}
+            </button>
+            <button
+              onClick={() => exportList('pdf')}
+              disabled={!filtered.length || !!exporting}
+              title={filtered.length ? 'Download this list as a PDF' : 'Nothing to export'}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, border: 'none', background: c.primary, color: 'white', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: filtered.length && !exporting ? 'pointer' : 'not-allowed', opacity: filtered.length ? 1 : 0.6 }}>
+              <Download size={15} /> {exporting === 'pdf' ? 'Preparing…' : 'Export PDF'}
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -202,9 +271,26 @@ export function PatientsPage({ onNavigate }: { onNavigate: (page: string) => voi
               style={{ width: '100%', padding: '9px 14px 9px 34px', borderRadius: 10, border: `1px solid ${c.border}`, fontFamily: 'Inter', fontSize: 13, color: c.textPrimary, background: c.white, outline: 'none', boxSizing: 'border-box' }}
             />
           </div>
-          <button style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10, border: `1px solid ${c.border}`, background: c.white, fontFamily: 'Inter', fontSize: 13, color: c.textSecondary, cursor: 'pointer' }}>
-            <Filter size={13} /> Filter
-          </button>
+          {/* This button did nothing at all. Risk is the only axis a counselor
+              actually triages on, so that's what it filters. */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowFilter(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 10, border: `1px solid ${riskFilter === 'all' ? c.border : c.primary}`, background: riskFilter === 'all' ? c.white : c.veryLightSage, fontFamily: 'Inter', fontSize: 13, color: riskFilter === 'all' ? c.textSecondary : c.primary, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <Filter size={13} /> {riskFilter === 'all' ? 'Filter' : `Risk: ${riskFilter}`}
+            </button>
+            {showFilter && (
+              <div style={{ position: 'absolute', right: 0, top: 40, width: 170, zIndex: 200, background: c.white, borderRadius: 12, border: `1px solid ${c.border}`, boxShadow: sh.modal, overflow: 'hidden' }}>
+                {['all', 'high', 'medium', 'low'].map(r => (
+                  <button key={r}
+                    onClick={() => { setRiskFilter(r); setShowFilter(false); }}
+                    style={{ width: '100%', padding: '9px 14px', border: 'none', background: riskFilter === r ? c.veryLightSage : 'transparent', fontFamily: 'Inter', fontSize: 13, color: c.textPrimary, cursor: 'pointer', textAlign: 'left', textTransform: 'capitalize' }}>
+                    {r === 'all' ? 'All patients' : `${r} risk`}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {viewMode === 'table' ? (
