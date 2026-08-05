@@ -91,7 +91,11 @@ const listPayments = h((req, res) => success(res, svc.listPayments()));
 
 /* notifications */
 const listNotifications  = h((req, res) => success(res, { notifications: svc.listNotifications() }));
-const createNotification = h((req, res) => success(res, { notification: svc.createNotification(req.body) }, 'Notification sent', 201));
+const createNotification = h((req, res) => {
+  const n = svc.createNotification(req.body);
+  return success(res, { notification: n },
+    n.scheduledFor ? 'Notification scheduled' : 'Notification sent', 201);
+});
 const readNotification   = h((req, res) => { svc.markNotificationRead(req.params.id); return success(res, {}, 'Marked as read'); });
 const deleteNotification = h((req, res) => { svc.deleteNotification(req.params.id); return success(res, {}, 'Notification deleted'); });
 

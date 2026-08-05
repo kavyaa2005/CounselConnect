@@ -82,5 +82,19 @@
     "endedAt": "2026-08-05T06:48:29.253Z",
     "durationSec": 0,
     "createdAt": "2026-08-05T06:46:26.454Z"
+  },
+  {
+    "id": "55f21e02-6438-494d-98b3-b176f3892700",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "doctorId": "d1",
+    "counselorId": "c1",
+    "userName": "Farhan",
+    "doctorName": "Dr. Sarah Chen",
+    "initiatedBy": "doctor",
+    "status": "ended",
+    "startedAt": "2026-08-05T07:29:17.560Z",
+    "endedAt": "2026-08-05T07:29:56.667Z",
+    "durationSec": 39,
+    "createdAt": "2026-08-05T07:29:14.153Z"
   }
 ]

@@ -178,10 +178,33 @@
     "documents": [],
     "status": "confirmed",
     "outsideHours": null,
-    "paymentStatus": "unpaid",
+    "paymentStatus": "paid",
     "createdAt": "2026-08-05T06:45:09.408Z",
     "acceptedAt": "2026-08-05T06:45:22.270Z",
     "rejectionReason": "",
-    "updatedAt": "2026-08-05T06:45:22.270Z"
+    "updatedAt": "2026-08-05T07:27:30.942Z",
+    "paymentId": "5323e65a-cc2c-4c8d-b9af-0dc1be2c2396"
+  },
+  {
+    "id": "9f2a7c40-e837-4dc6-b486-3977e825dc1f",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "counselorId": "c1",
+    "counselorName": "Dr. Sarah Chen",
+    "counselorAvatar": "https://images.unsplash.com/photo-1573495804664-b1c0849525af?w=300&h=300&fit=crop&crop=face",
+    "sessionType": "video",
+    "mode": "online",
+    "date": "August 6, 2026",
+    "time": "12:00 PM",
+    "dateTime": "2026-08-06T06:30:00.000Z",
+    "price": 80,
+    "reason": "",
+    "documents": [],
+    "status": "confirmed",
+    "outsideHours": null,
+    "paymentStatus": "unpaid",
+    "createdAt": "2026-08-05T07:27:23.904Z",
+    "acceptedAt": "2026-08-05T07:28:17.349Z",
+    "rejectionReason": "",
+    "updatedAt": "2026-08-05T07:28:17.349Z"
   }
 ]

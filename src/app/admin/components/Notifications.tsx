@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Bell, Mail, Smartphone, Send, Clock, Users, CheckCircle, X, Calendar } from "lucide-react";
+import { Bell, Send, Clock, Users, CheckCircle, X, Calendar } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 import { adminApi, useAdminData } from "../lib/adminApi";
 
@@ -8,13 +8,8 @@ const statusColors: Record<string, { bg: string; color: string }> = {
   Sent: { bg: "#EAF7EA", color: "#4CAF50" },
   System: { bg: "#FFF9E8", color: "#F59E0B" },
   Read: { bg: "#F3F4F6", color: "#9CA3AF" },
+  Scheduled: { bg: "#EBF5FF", color: "#42A5F5" },
 };
-
-const timezones = [
-  "Asia/Kolkata (IST)", "America/New_York (EST)", "America/Los_Angeles (PST)",
-  "Europe/London (GMT)", "Europe/Paris (CET)", "Asia/Tokyo (JST)",
-  "Asia/Singapore (SGT)", "UTC",
-];
 
 export function Notifications({ pageAction, onActionConsumed }: { pageAction?: string | null; onActionConsumed?: () => void } = {}) {
   const { t } = useTheme();
@@ -24,8 +19,7 @@ export function Notifications({ pageAction, onActionConsumed }: { pageAction?: s
   const history: any[] = data?.notifications || [];
   const counts = dash?.counts || { users: 0, counselors: 0 };
 
-  const [channels, setChannels] = useState({ push: true, email: true, sms: false });
-  const [target, setTarget] = useState("All users");
+  const [target, setTarget] = useState("Everyone");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [sent, setSent] = useState(false);
@@ -34,17 +28,24 @@ export function Notifications({ pageAction, onActionConsumed }: { pageAction?: s
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [schedDate, setSchedDate] = useState("");
   const [schedTime, setSchedTime] = useState("");
-  const [schedTz, setSchedTz] = useState("Asia/Kolkata (IST)");
   const [schedSuccess, setSchedSuccess] = useState(false);
 
   useEffect(() => {
     if (pageAction === "add") { onActionConsumed?.(); }
   }, [pageAction]);
 
+  /**
+   * How many accounts a broadcast will actually reach.
+   *
+   * "All users" reaches clients AND counselors on the backend (audience
+   * 'all'), but this only counted clients — so the confirmation understated
+   * the reach. "Admins" was hardcoded to 0.
+   */
   function recipientCount(tgt: string) {
-    if (tgt === "Counselors") return counts.counselors;
-    if (tgt === "Admins") return 0;
-    return counts.users;
+    if (tgt === "Counselors") return counts.counselors ?? 0;
+    if (tgt === "Clients") return counts.users ?? 0;
+    if (tgt === "Admins") return counts.admins ?? 0;
+    return (counts.users ?? 0) + (counts.counselors ?? 0);
   }
 
   async function handleSend() {
@@ -66,15 +67,39 @@ export function Notifications({ pageAction, onActionConsumed }: { pageAction?: s
     } finally { setBusy(false); }
   }
 
+  /**
+   * Schedules a broadcast for later.
+   *
+   * This used to send the notification immediately, tack a literal
+   * "(Scheduled for …)" string onto the end of the message body, and then
+   * report "Notification Scheduled!". Recipients got it straight away. The
+   * send time now travels to the server, which holds the broadcast back until
+   * it is due.
+   */
   async function handleSchedule() {
     if (!schedDate || !schedTime) return;
+    if (!title.trim() || !body.trim()) {
+      setSendError("Give the notification a title and message first");
+      setShowScheduleModal(false);
+      return;
+    }
     setBusy(true);
+    setSendError(null);
     try {
+      // Built in the browser's own zone, so what the admin picked is what the
+      // recipients get. (The timezone dropdown is display-only for now.)
+      const when = new Date(`${schedDate}T${schedTime}`);
+      if (isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+        setSendError("Pick a date and time in the future");
+        setBusy(false);
+        return;
+      }
       await adminApi.sendNotification({
-        title: title.trim() || "Scheduled Notification",
-        message: `${body.trim() || "Scheduled announcement."}\n\n(Scheduled for ${schedDate} at ${schedTime} ${schedTz.split(" ")[0]})`,
+        title: title.trim(),
+        message: body.trim(),
         audience: target,
         type: "info",
+        scheduledFor: when.toISOString(),
       });
       await refetch();
       setSchedSuccess(true);
@@ -83,7 +108,12 @@ export function Notifications({ pageAction, onActionConsumed }: { pageAction?: s
         setShowScheduleModal(false);
         setSchedDate("");
         setSchedTime("");
+        setTitle("");
+        setBody("");
       }, 2000);
+    } catch (e: any) {
+      setSendError(e?.message || "Could not schedule that notification");
+      setShowScheduleModal(false);
     } finally { setBusy(false); }
   }
 
@@ -131,8 +161,12 @@ export function Notifications({ pageAction, onActionConsumed }: { pageAction?: s
             {/* Target */}
             <div className="mb-4">
               <label className="text-xs font-semibold mb-1.5 block" style={{ color: t.muted }}>SEND TO</label>
+              {/* "All users" was misleading — it mapped to audience 'all' on
+                  the backend, so it went to counselors too, and there was no
+                  way to reach clients only. These four match the audiences the
+                  server actually supports. */}
               <div className="flex flex-wrap gap-2">
-                {["All users", "Counselors", "Admins"].map(tgt => (
+                {["Everyone", "Clients", "Counselors", "Admins"].map(tgt => (
                   <button key={tgt} onClick={() => setTarget(tgt)}
                     className="px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
                     style={target === tgt ? {
@@ -147,25 +181,18 @@ export function Notifications({ pageAction, onActionConsumed }: { pageAction?: s
               </p>
             </div>
 
-            {/* Channels */}
-            <div className="mb-4">
-              <label className="text-xs font-semibold mb-1.5 block" style={{ color: t.muted }}>CHANNELS</label>
-              <div className="flex gap-3">
-                {([
-                  { key: "push", icon: Bell, label: "Push" },
-                  { key: "email", icon: Mail, label: "Email" },
-                  { key: "sms", icon: Smartphone, label: "SMS" },
-                ] as const).map(({ key, icon: Icon, label }) => (
-                  <button key={key} onClick={() => setChannels(prev => ({ ...prev, [key]: !prev[key] }))}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-all"
-                    style={channels[key] ? {
-                      background: "#F0F7F5", borderColor: "#5E8B7E", color: "#5E8B7E"
-                    } : { borderColor: t.inputBorder, color: t.muted, background: t.input }}>
-                    <Icon className="w-3.5 h-3.5" />
-                    {label}
-                  </button>
-                ))}
-              </div>
+            {/* Email and SMS toggles used to sit here. Neither existed: the
+                channel state was never sent to the server, and there is no
+                mailer or SMS gateway wired up — so switching them on changed
+                nothing while implying the message would go out that way.
+                In-app delivery is the one real channel, so it's stated rather
+                than offered as a choice. */}
+            <div className="mb-4 flex items-center gap-2 px-3 py-2 rounded-xl"
+              style={{ background: t.card2 }}>
+              <Bell className="w-3.5 h-3.5" style={{ color: "#5E8B7E" }} />
+              <span className="text-xs" style={{ color: t.textSec }}>
+                Delivered in-app, to the recipient's notification feed.
+              </span>
             </div>
 
             {/* Title */}
@@ -241,7 +268,8 @@ export function Notifications({ pageAction, onActionConsumed }: { pageAction?: s
                 </p>
               )}
               {history.map((n: any, i: number) => {
-                const label = n.system ? "System" : n.read ? "Read" : "Sent";
+                const queued = !!n.scheduledFor && new Date(n.scheduledFor).getTime() > Date.now();
+                const label = n.system ? "System" : queued ? "Scheduled" : n.read ? "Read" : "Sent";
                 const sc = statusColors[label];
                 return (
                   <motion.div key={n.id}
@@ -268,9 +296,13 @@ export function Notifications({ pageAction, onActionConsumed }: { pageAction?: s
                           <Users className="w-3 h-3" /> {n.audience}
                         </span>
                         <span className="text-xs" style={{ color: t.muted }}>
-                          {new Date(n.createdAt).toLocaleString("en-US", {
-                            month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-                          })}
+                          {queued
+                            ? `Sends ${new Date(n.scheduledFor).toLocaleString("en-US", {
+                                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                              })}`
+                            : new Date(n.createdAt).toLocaleString("en-US", {
+                                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                              })}
                         </span>
                       </div>
                     </div>
@@ -377,14 +409,19 @@ export function Notifications({ pageAction, onActionConsumed }: { pageAction?: s
                             onBlur={e => e.target.style.borderColor = t.inputBorder} />
                         </div>
                       </div>
-                      <div>
-                        <label className="text-xs font-semibold mb-1.5 block uppercase tracking-wide" style={{ color: t.muted }}>Timezone</label>
-                        <select value={schedTz} onChange={e => setSchedTz(e.target.value)}
-                          className="w-full px-4 py-2.5 text-sm rounded-xl border outline-none"
-                          style={{ background: t.input, borderColor: t.inputBorder, color: t.text }}>
-                          {timezones.map(tz => <option key={tz} value={tz}>{tz}</option>)}
-                        </select>
-                      </div>
+                      {/* A timezone dropdown used to sit here. It was never
+                          applied to anything — picking Tokyo scheduled the
+                          same moment as picking London. The send time is
+                          interpreted in this browser's zone, so that's what
+                          it now says. */}
+                      <p className="text-xs" style={{ color: t.muted }}>
+                        Sends at {schedDate && schedTime
+                          ? new Date(`${schedDate}T${schedTime}`).toLocaleString("en-US", {
+                              dateStyle: "medium", timeStyle: "short",
+                            })
+                          : "the date and time you pick"}
+                        {" "}({Intl.DateTimeFormat().resolvedOptions().timeZone}, your local time).
+                      </p>
                       <div className="flex gap-3 pt-2">
                         <button onClick={() => { setShowScheduleModal(false); }}
                           className="flex-1 py-2.5 rounded-xl text-sm font-semibold border"

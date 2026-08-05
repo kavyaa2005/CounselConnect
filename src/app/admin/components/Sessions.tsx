@@ -217,14 +217,10 @@ export function Sessions(_props?: any) {
                   )}
                 </div>
               </motion.div>
-            ) : (
-              <motion.div key="empty"
-                className="rounded-2xl border flex flex-col items-center justify-center h-48"
-                style={{ background: t.card, borderColor: t.border, boxShadow: t.shadow }}>
-                <Video className="w-10 h-10 mb-2" style={{ color: t.muted }} />
-                <p className="text-sm" style={{ color: t.muted }}>Click a session to view details</p>
-              </motion.div>
-            )}
+            ) : null /* The empty "Click a session to view details" placeholder
+                        card used to sit here, taking up a fixed 192px of the
+                        column for an instruction the interface already implies.
+                        Recent Sessions simply moves up to fill the space. */}
           </AnimatePresence>
 
           {/* Recent Sessions */}

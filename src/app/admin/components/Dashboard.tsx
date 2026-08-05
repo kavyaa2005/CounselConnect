@@ -91,6 +91,14 @@ export function Dashboard({ onNavigate }: { onNavigate?: (p: any, a?: string) =>
   const revenueStat  = stats.find((s: any) => s.key === "revenue");
   const healthyCount = systemStatus.filter((s: any) => s.health >= 95).length;
 
+  // Numbers for the hero line. Taken as numbers, not the display strings —
+  // the old pluralisation compared against the formatted value ("1"), which
+  // would have broken the moment a count passed 999 and became "1,000".
+  const num = (v: any) => Number(String(v ?? 0).replace(/[^0-9.-]/g, "")) || 0;
+  const applicationsCount = counts.pendingApplications ?? 0;
+  const todayCount = counts.todaySessions ?? num(todayStat?.value);
+  const pendingCount = num(pendingStat?.value);
+
   if (loading && !data) {
     return (
       <div className="p-6 flex items-center justify-center" style={{ background: t.bg, minHeight: "100vh" }}>
@@ -170,19 +178,32 @@ export function Dashboard({ onNavigate }: { onNavigate?: (p: any, a?: string) =>
               <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "#4CAF50" }} />
               <span className="text-xs" style={{ color: "rgba(255,255,255,0.65)" }}>Live</span>
             </div>
+            {/* This is a shared operational account, not a person — greeting it
+                by whoever happens to be signed in read oddly. */}
             <h1 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: "'Poppins', sans-serif" }}>
-              {getGreeting()}, {admin?.firstName || admin?.name || "Admin"} 👋
+              {getGreeting()}, Admin 👋
             </h1>
+            {/* Written from live counts, and phrased around what an admin
+                actually acts on. The pending/today figures are platform-wide
+                totals, so they're stated as such rather than as "yours". */}
             <p className="text-sm" style={{ color: "rgba(255,255,255,0.72)" }}>
-              You have{" "}
+              {applicationsCount > 0 ? (
+                <>
+                  <span className="font-semibold text-white underline decoration-dotted">
+                    {applicationsCount} counselor application{applicationsCount === 1 ? "" : "s"}
+                  </span>{" "}
+                  awaiting your review ·{" "}
+                </>
+              ) : (
+                <>No applications awaiting review · </>
+              )}
               <span className="font-semibold text-white underline decoration-dotted">
-                {pendingStat?.value ?? 0} pending request{pendingStat?.value === "1" ? "" : "s"}
+                {todayCount} session{todayCount === 1 ? "" : "s"}
               </span>{" "}
-              and{" "}
+              across the platform today,{" "}
               <span className="font-semibold text-white underline decoration-dotted">
-                {todayStat?.value ?? 0} session{todayStat?.value === "1" ? "" : "s"}
-              </span>{" "}
-              scheduled today.
+                {pendingCount} awaiting a counselor
+              </span>.
             </p>
             <div className="flex items-center gap-2 mt-4">
               <button onClick={() => onNavigate?.("appointments")}

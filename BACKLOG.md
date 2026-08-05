@@ -91,6 +91,9 @@ Updated as work lands. Admin section pending the spec.
 - **Notifications actually send**: audience normalised, broadcasts reach user and doctor feeds, delete retracts
 - **Error boundaries** on every admin page; API client surfaces HTTP status and non-JSON responses
 - Fixed: missing `applications` key in TopNav `pageMeta` crashed the whole admin shell
+- **Dashboard hero**: greets the role, not the signed-in person; summary line reports applications awaiting review, today's sessions and pending requests from live counts
+- **Payments verified dynamic** — transactions, revenue, payouts, platform fee and the 6-month series all derive from `payments.json` + real bookings
+- **Notifications**: fake Email/SMS channels removed, `Clients` / `Counselors` / `Everyone` / `Admins` audiences that match the server, honest recipient counts, and **real scheduling** (it used to send immediately and claim otherwise)
 
 ### Not done
 **Added since:** support-ticket queue with reply and status management.

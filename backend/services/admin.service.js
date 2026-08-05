@@ -838,9 +838,17 @@ const getDashboard = () => {
     counts: {
       users: users.length,
       counselors: doctors.length,
+      // Needed so the notification composer can state a real recipient count
+      // for every audience rather than guessing zero for admins.
+      admins: readStore('admins.json').length,
       appointments: appts.length,
       feedback: fb.length,
       pendingCounselors: doctors.filter(d => (d.status || 'Verified') === 'Pending').length,
+      // Counselor applications still awaiting a decision — the one queue that
+      // is genuinely the admin's own work, rather than a platform-wide total.
+      pendingApplications: readStore('applications.json')
+        .filter(a => String(a.status || 'pending').toLowerCase() === 'pending').length,
+      todaySessions: todaysAppts.length,
     },
   };
 };
@@ -942,18 +950,32 @@ const AUDIENCES = ['users', 'counselors', 'admins', 'all'];
 
 const normaliseAudience = (raw) => {
   const a = String(raw || 'all').trim().toLowerCase();
-  if (a.includes('all')) return 'all';
+  // 'everyone' would otherwise only reach 'all' by falling through to the
+  // default at the bottom — spelled out so it can't break silently.
+  if (a.includes('all') || a.includes('everyone')) return 'all';
   if (a.includes('counselor') || a.includes('doctor')) return 'counselors';
   if (a.includes('admin')) return 'admins';
   if (a.includes('user') || a.includes('client') || a.includes('patient')) return 'users';
   return 'all';
 };
 
-const createNotification = ({ title, message, type = 'info', audience = 'all' }) => {
+const createNotification = ({ title, message, type = 'info', audience = 'all', scheduledFor = null }) => {
   const t = String(title || '').trim();
   const m = String(message || '').trim();
   if (!t || !m) {
     throw Object.assign(new Error('Title and message are required'), { statusCode: 400 });
+  }
+
+  // Scheduling used to be theatre: the UI appended "(Scheduled for …)" to the
+  // message, sent it immediately, and then said "Notification Scheduled!".
+  // A future send time is now stored and honoured.
+  let sendAt = null;
+  if (scheduledFor) {
+    const when = new Date(scheduledFor);
+    if (isNaN(when.getTime())) {
+      throw Object.assign(new Error('That scheduled time could not be understood'), { statusCode: 400 });
+    }
+    if (when.getTime() > Date.now()) sendAt = when.toISOString();
   }
 
   const list = readStore('platform-notifications.json');
@@ -967,12 +989,17 @@ const createNotification = ({ title, message, type = 'info', audience = 'all' })
     read: false,
     system: false,
     broadcast: true,
+    /** null = send now; an ISO date = hold until then. */
+    scheduledFor: sendAt,
     createdAt: new Date().toISOString(),
   };
   list.push(n);
   writeStore('platform-notifications.json', list);
   return n;
 };
+
+/** Has this broadcast's send time arrived? */
+const isDue = (n) => !n.scheduledFor || new Date(n.scheduledFor).getTime() <= Date.now();
 
 /**
  * Broadcasts visible to one role. Read by the user and doctor feeds so an
@@ -982,6 +1009,7 @@ const getBroadcastsFor = (role) => {
   const want = role === 'doctor' ? 'counselors' : role === 'admin' ? 'admins' : 'users';
   return readStore('platform-notifications.json')
     .filter(n => n.broadcast !== false)
+    .filter(isDue)
     .filter(n => n.audience === 'all' || n.audience === want);
 };
 
