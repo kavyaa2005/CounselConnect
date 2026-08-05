@@ -7,18 +7,24 @@ browsable in MongoDB Compass on your machine.
 
 ## 1. Install and start MongoDB
 
-Install **MongoDB Community Server** and **MongoDB Compass** (the installer
-offers Compass as a checkbox — tick it).
+**New to this? Follow [INSTALL-MONGODB.md](INSTALL-MONGODB.md) instead — it's a
+full step-by-step Windows walkthrough.** This page is the short version.
+
+Install **MongoDB Community Server**, leaving both *Install MongoD as a
+Service* and *Install MongoDB Compass* ticked in the installer.
 
 Then make sure the server is running:
 
-| OS | Start it | Check it |
-|---|---|---|
-| Windows | `net start MongoDB` — or it already runs as a service after install | `mongosh` |
-| macOS | `brew services start mongodb-community` | `mongosh` |
-| Linux | `sudo systemctl start mongod` | `mongosh` |
+| OS | Start it |
+|---|---|
+| Windows | Runs automatically after install. Otherwise `net start MongoDB`, or start **MongoDB Server** in `services.msc` |
+| macOS | `brew services start mongodb-community` |
+| Linux | `sudo systemctl start mongod` |
 
-If `mongosh` opens a prompt, MongoDB is up.
+To check it's up, open **Compass** and connect to `mongodb://localhost:27017`.
+
+> Note: the Windows `.msi` no longer bundles the `mongosh` shell — it's a
+> separate download. You don't need it here; Compass covers everything.
 
 ---
 
