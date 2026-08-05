@@ -39,7 +39,24 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'CounselConnect API is running', timestamp: new Date().toISOString() });
+  // Reports which backend is live and what's in it, so you can confirm the
+  // database is connected without opening Compass.
+  const { storeStats, usingMongo } = require('./utils/fileStore.utils');
+  const s = storeStats();
+  res.json({
+    success: true,
+    message: 'CounselConnect API is running',
+    timestamp: new Date().toISOString(),
+    database: {
+      engine: usingMongo() ? 'mongodb' : 'json-files',
+      name: s.dbName,
+      uri: s.uri,
+      collections: s.collections.length,
+      documents: s.collections.reduce((n, c) => n + c.count, 0),
+      pendingWrites: s.pendingWrites,
+      lastError: s.lastError,
+    },
+  });
 });
 
 // API Routes

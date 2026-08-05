@@ -110,3 +110,20 @@ _Full gap analysis still awaiting the Admin functionality spec._
 | X1 | **No TypeScript checking** | No `tsconfig.json`, TypeScript not installed. `Record<Page, PageMeta>` was pure decoration — that's exactly how the admin-shell crash slipped through. A `typecheck` script would catch this class of bug. Adding it will likely surface pre-existing errors. |
 | X2 | **Email delivery** | Password reset works end to end but the code is delivered to the server console in development. `deliver()` in `passwordReset.service.js` is the single seam for a real mailer. Still needed for U4 (email verification). |
 | X3 | **2FA is available but not enforced** | Any account can enable it; nothing requires it. A policy (e.g. mandatory for counselors) would be a product decision. |
+
+---
+
+## DATABASE
+
+Storage moved from JSON files to **MongoDB** (`counselconnect`), visible in Compass.
+See `DATABASE.md` for setup.
+
+- All 21 stores became collections of the same name; documents keep their `id` and reuse it as `_id`
+- Existing data imported on first boot; JSON files kept untouched as the backup
+- `npm run db:status`, `npm run db:import`, and `/api/health` report the live database
+- Falls back to the JSON files (with a warning) if MongoDB isn't running, so a stopped database never blocks a demo
+
+| # | Item | Notes |
+|---|---|---|
+| DB1 | **Single-process assumption** | Reads are served from an in-process cache loaded at boot; writes go straight to MongoDB. Correct for one backend instance. Running several would need the services converted to async/await against the driver. |
+| DB2 | **Not verified against a real mongod** | The sandbox could not download a MongoDB binary. The store is tested against the real driver's BSON encoder and a stand-in for the driver surface; the live database itself needs one run on a machine with MongoDB installed. |

@@ -11,7 +11,8 @@
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
-const { readStore, writeStore } = require('./utils/fileStore.utils');
+const { readStore, writeStore, initStore, closeStore } = require('./utils/fileStore.utils');
+const dbConfig = require('./config/db.config');
 
 const SALT_ROUNDS = 12;
 const hash = (p) => bcrypt.hashSync(p, SALT_ROUNDS);
@@ -141,7 +142,16 @@ function seedUsers() {
   console.log(`  users     : ${users.length} account(s) — password "${USER_PASSWORD}"`);
 }
 
+/**
+ * Makes sure a store exists and is at least an empty array/object.
+ *
+ * This used to touch the JSON file directly, which does nothing useful once
+ * MongoDB is the backend — `initStore` already creates every collection, so
+ * there's nothing left to guarantee here.
+ */
 function ensureFile(name, empty) {
+  const { usingMongo } = require('./utils/fileStore.utils');
+  if (usingMongo()) return;
   const fs = require('fs');
   const p = path.join(__dirname, 'data', name);
   if (!fs.existsSync(p)) fs.writeFileSync(p, empty, 'utf8');
@@ -284,28 +294,48 @@ function seedDocumentFiles() {
   }
 }
 
-console.log('\n🌱 Seeding CounselConnect demo data...\n');
+/**
+ * Seeding now runs inside an async wrapper: the store has to connect to
+ * MongoDB and load its cache before any read/write, and queued writes have to
+ * be flushed before the process exits — otherwise the script would finish and
+ * tear down the connection with the inserts still in flight.
+ */
+async function run() {
+  const store = await initStore();
 
-['admins.json', 'payments.json', 'platform-notifications.json', 'calls.json'].forEach(f => ensureFile(f, '[]'));
-['settings.json'].forEach(f => ensureFile(f, '{}'));
-['notifications.json'].forEach(f => ensureFile(f, '[]'));
+  console.log('\n🌱 Seeding CounselConnect demo data...\n');
+  console.log(store.ok
+    ? `   Database: MongoDB — ${dbConfig.dbName} at ${dbConfig.uri}\n`
+    : `   Database: JSON files (MongoDB unreachable)\n`);
 
-seedAdmins();
-seedDoctors();
-seedUsers();
-seedRelationships();
-seedDocumentFiles();
+  ['admins.json', 'payments.json', 'platform-notifications.json', 'calls.json'].forEach(f => ensureFile(f, '[]'));
+  ['settings.json'].forEach(f => ensureFile(f, '{}'));
+  ['notifications.json'].forEach(f => ensureFile(f, '[]'));
 
-const admins = readStore('admins.json');
-const doctors = readStore('doctors.json');
-const users = readStore('users.json');
+  seedAdmins();
+  seedDoctors();
+  seedUsers();
+  seedRelationships();
+  seedDocumentFiles();
 
-console.log('\n─────────────────────── LOGIN CREDENTIALS ───────────────────────\n');
-console.log('ADMIN PANEL  →  http://localhost:5173/admin');
-admins.forEach(a => console.log(`   ${a.email.padEnd(38)} ${ADMIN_PASSWORD}`));
-console.log('\nDOCTOR PANEL →  http://localhost:5173/doctor');
-doctors.forEach(d => console.log(`   ${d.email.padEnd(38)} ${DOCTOR_PASSWORD}   (${d.name})`));
-console.log('\nUSER PANEL   →  http://localhost:5173/dashboard');
-users.forEach(u => console.log(`   ${u.email.padEnd(38)} ${USER_PASSWORD}   (${u.firstName || u.email})`));
-console.log('\nAll three roles sign in at the same page: http://localhost:5173/login');
-console.log('─────────────────────────────────────────────────────────────────\n');
+  const admins = readStore('admins.json');
+  const doctors = readStore('doctors.json');
+  const users = readStore('users.json');
+
+  console.log('\n─────────────────────── LOGIN CREDENTIALS ───────────────────────\n');
+  console.log('ADMIN PANEL  →  http://localhost:5173/admin');
+  admins.forEach(a => console.log(`   ${a.email.padEnd(38)} ${ADMIN_PASSWORD}`));
+  console.log('\nDOCTOR PANEL →  http://localhost:5173/doctor');
+  doctors.forEach(d => console.log(`   ${d.email.padEnd(38)} ${DOCTOR_PASSWORD}   (${d.name})`));
+  console.log('\nUSER PANEL   →  http://localhost:5173/dashboard');
+  users.forEach(u => console.log(`   ${u.email.padEnd(38)} ${USER_PASSWORD}   (${u.firstName || u.email})`));
+  console.log('\nAll three roles sign in at the same page: http://localhost:5173/login');
+  console.log('─────────────────────────────────────────────────────────────────\n');
+
+  await closeStore();
+}
+
+run().catch(err => {
+  console.error('\nSeeding failed:', err.message, '\n');
+  process.exit(1);
+});
