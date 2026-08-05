@@ -1,9 +1,9 @@
 @echo off
-REM ─────────────────────────────────────────────────────────────
+REM -------------------------------------------------------------
 REM  CounselConnect launcher
 REM  Checks MongoDB is running, then opens the backend and the
 REM  frontend in their own windows.
-REM ─────────────────────────────────────────────────────────────
+REM -------------------------------------------------------------
 title CounselConnect launcher
 cd /d "%~dp0"
 
@@ -13,7 +13,7 @@ echo    CounselConnect
 echo  ================================================
 echo.
 
-REM ── 1. MongoDB ──
+REM -- 1. MongoDB --
 echo  [1/3] Checking MongoDB...
 sc query MongoDB 2>nul | find "RUNNING" >nul
 if errorlevel 1 goto startmongo
