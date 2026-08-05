@@ -8,5 +8,18 @@
     "tags": [],
     "createdAt": "2026-07-04T20:08:25.184Z",
     "updatedAt": "2026-07-04T20:08:41.187Z"
+  },
+  {
+    "id": "34a5ba38-d1a2-448b-a4d3-b2136109407f",
+    "doctorId": "d1",
+    "patientId": "cbc9dcf0-1e9b-42c9-ae64-6602d4721c22",
+    "appointmentId": null,
+    "title": "Note — Asra",
+    "content": "",
+    "tags": [],
+    "shared": false,
+    "aiSummary": null,
+    "createdAt": "2026-08-04T19:24:39.899Z",
+    "updatedAt": "2026-08-04T19:24:39.899Z"
   }
 ]

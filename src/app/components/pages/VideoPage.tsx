@@ -8,13 +8,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff, PhoneOff, MessageSquare,
-  Clock, Send, Search, AlertCircle, Loader2, CheckCircle, History, Phone,
+  Clock, Send, Search, AlertCircle, Loader2, CheckCircle, History, Phone, ArrowLeft,
 } from 'lucide-react';
 import { CC } from '../../lib/colors';
 import { api } from '../../lib/api';
 import { CallSession, getSocket, checkVideoSupport } from '../../lib/callClient';
 import type { CallStatus, IncomingCall } from '../../lib/callClient';
-import { takePendingCall } from '../../lib/callInbox';
+import { takePendingCall, onPendingCall } from '../../lib/callInbox';
+import { useMediaStream } from '../../lib/useMediaStream';
 
 export function VideoPage() {
   /* ── lobby ── */
@@ -50,8 +51,10 @@ export function VideoPage() {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  // Callback-ref binding: attaches whichever arrives second, the stream or the
+  // element, and calls play() explicitly. See lib/useMediaStream.ts.
+  const localVideo = useMediaStream(localStream);
+  const remoteVideo = useMediaStream(remoteStream);
   const sessionRef = useRef<CallSession | null>(null);
   const support = checkVideoSupport();
 
@@ -110,9 +113,29 @@ export function VideoPage() {
   }, [contacts]);
 
   /* ─────────── timer ─────────── */
+  // Anchored to a start timestamp rather than counted in ticks: a momentary
+  // network drop used to send status back to 'connecting', which reset the
+  // clock to 00:00 mid-session.
+  const startedAtRef = useRef<number | null>(null);
   useEffect(() => {
-    if (status !== 'connected') { setSeconds(0); return; }
-    const t = setInterval(() => setSeconds(s => s + 1), 1000);
+    if (status === 'connected' && startedAtRef.current === null) {
+      startedAtRef.current = Date.now();
+    }
+    if (status === 'idle' || status === 'ended') {
+      startedAtRef.current = null;
+      setSeconds(0);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    if (!['connected', 'connecting'].includes(status)) return;
+    const tick = () => {
+      if (startedAtRef.current !== null) {
+        setSeconds(Math.floor((Date.now() - startedAtRef.current) / 1000));
+      }
+    };
+    tick();
+    const t = setInterval(tick, 500);
     return () => clearInterval(t);
   }, [status]);
 
@@ -147,14 +170,6 @@ export function VideoPage() {
   }, [loadLobby]);
 
   useEffect(() => () => { sessionRef.current?.destroy(); }, []);
-
-  // Attach streams once both the stream AND the <video> element exist
-  useEffect(() => {
-    if (localVideoRef.current && localStream) localVideoRef.current.srcObject = localStream;
-  }, [localStream, status]);
-  useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
-  }, [remoteStream, status]);
 
   /* ─────────── placing a call ─────────── */
   async function startCall(contact: any, voiceOnly = false) {
@@ -198,6 +213,12 @@ export function VideoPage() {
     setMicOn(true);
     setCameraOn(!voiceOnly);
     setCallError(null);
+    setDiagnostic('');
+    // Switch to the call screen on the click, not several seconds later.
+    // accept() awaits the socket and then getUserMedia — including the camera
+    // permission prompt — and only emits 'connecting' afterwards, so answering
+    // used to leave you staring at the lobby wondering if it had worked.
+    setStatus('connecting');
 
     const s = buildSession();
     try {
@@ -210,12 +231,17 @@ export function VideoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildSession]);
 
-  // Handed off from the global ringer on another screen
+  /* Accepting from the global ringer.
+     Two paths, because the ringer can fire on any screen:
+       • queued before this page existed → drained here on mount
+       • accepted while this page is already open → delivered by subscription,
+         which is the case the old mount-only read silently dropped. */
   useEffect(() => {
     const handed = takePendingCall();
     if (handed) answerCall(handed);
+    return onPendingCall(call => answerCall(call));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [answerCall]);
 
   const acceptIncoming = () => {
     if (!incoming) return;
@@ -237,6 +263,22 @@ export function VideoPage() {
       setStatus('idle'); setPeer(null); setEndedReason(null);
       setLocalStream(null); setRemoteStream(null); loadLobby();
     }, 1600);
+  }
+
+  /** Ends whatever is happening and returns to the lobby immediately. */
+  function leaveSession() {
+    if (['calling', 'connecting', 'connected'].includes(status)) {
+      if (status === 'calling') sessionRef.current?.cancel();
+      else sessionRef.current?.end();
+    }
+    sessionRef.current?.destroy();
+    sessionRef.current = null;
+    setStatus('idle');
+    setPeer(null);
+    setEndedReason(null);
+    setLocalStream(null);
+    setRemoteStream(null);
+    loadLobby();
   }
 
   function toggleMic() { const n = !micOn; setMicOn(n); sessionRef.current?.setMuted(!n); }
@@ -470,8 +512,20 @@ export function VideoPage() {
   }
 
   /* ═══════════════ IN CALL ═══════════════ */
+  // Fixed to the viewport, not `height: 100%`.
+  //
+  // The dashboard renders pages inside a wrapper that only sets `min-height`,
+  // and a percentage height resolves against a parent's *height* — min-height
+  // doesn't establish one. So `height: 100%` computed to `auto` and the whole
+  // call collapsed into a ~360px strip at the top of the page with the sidebar
+  // and navbar still around it. Taking over the viewport also gives the client
+  // the same distraction-free session the counselor already had.
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#0F1512', fontFamily: 'Inter' }}>
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9990,
+      display: 'flex', flexDirection: 'column',
+      background: '#0F1512', fontFamily: 'Inter',
+    }}>
       <div style={{ padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
         <div>
           <p style={{ color: 'white', fontWeight: 700, fontSize: 15 }}>{peer?.name}</p>
@@ -482,20 +536,48 @@ export function VideoPage() {
               : 'Session ended'}
           </p>
         </div>
-        {status === 'connected' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 9, background: 'rgba(255,255,255,0.08)', color: 'white', fontSize: 12 }}>
-            <Clock size={12} /> {clock}
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {status === 'connected' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 9, background: 'rgba(255,255,255,0.08)', color: 'white', fontSize: 12 }}>
+              <Clock size={12} /> {clock}
+            </div>
+          )}
+          {/* The call now covers the whole viewport, so there has to be an
+              unambiguous way out that isn't the red hang-up button. */}
+          <button onClick={leaveSession} title="End the session and go back"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px',
+              borderRadius: 10, border: '1px solid rgba(255,255,255,0.18)',
+              background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.85)',
+              fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter',
+            }}>
+            <ArrowLeft size={13} /> Leave session
+          </button>
+        </div>
       </div>
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Stage */}
         <div style={{ flex: 1, position: 'relative', background: '#0B0F0D' }}>
-          {status === 'connected' && !audioOnly ? (
-            <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          ) : (
-            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+          {/* The remote video stays mounted for as long as there is a stream,
+              whatever the status says. It used to be swapped out for the
+              placeholder whenever status wasn't exactly 'connected' — so a
+              momentary drop destroyed the element, and with it the srcObject
+              binding, leaving a permanently black stage. The placeholder now
+              sits on top instead of replacing it. */}
+          {!audioOnly && remoteStream && (
+            <video
+              {...remoteVideo.videoProps}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#0B0F0D' }}
+            />
+          )}
+
+          {(audioOnly || !remoteStream || status !== 'connected') && (
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14,
+              background: '#0B0F0D',
+            }}>
               <motion.div
                 animate={status === 'connected' ? {} : { scale: [1, 1.06, 1] }}
                 transition={{ duration: 1.6, repeat: Infinity }}
@@ -506,10 +588,26 @@ export function VideoPage() {
               <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>
                 {status === 'calling' ? 'Ringing…'
                   : status === 'connecting' ? (diagnostic || 'Connecting…')
-                  : status === 'connected' ? 'Voice call in progress'
-                  : endedReason === 'you-hung-up' ? 'You ended the session' : 'Session ended'}
+                  : status === 'connected' && audioOnly ? 'Voice call in progress'
+                  : status === 'connected' ? 'Waiting for their video…'
+                  : endedReason === 'you-hung-up' ? 'You ended the session'
+                  : endedReason === 'declined' ? 'Call declined'
+                  : 'Session ended'}
               </p>
             </div>
+          )}
+
+          {/* If the browser refuses to start playback there is nothing to see
+              and no error anywhere — this at least gives a way through. */}
+          {remoteVideo.blocked && status === 'connected' && !audioOnly && (
+            <button onClick={remoteVideo.retry}
+              style={{
+                position: 'absolute', inset: 0, margin: 'auto', width: 210, height: 44,
+                borderRadius: 14, border: 'none', cursor: 'pointer',
+                background: 'rgba(255,255,255,0.92)', color: '#0F1512', fontWeight: 700, fontSize: 14,
+              }}>
+              Tap to start video
+            </button>
           )}
 
           {status === 'connected' && (peerState.muted || peerState.videoOff) && (
@@ -530,7 +628,7 @@ export function VideoPage() {
           {/* Self view — pointless on a voice call */}
           {!audioOnly && (
             <div style={{ position: 'absolute', bottom: 20, right: 20, width: 190, height: 130, borderRadius: 16, overflow: 'hidden', background: '#111', border: '2px solid rgba(255,255,255,0.12)' }}>
-              <video ref={localVideoRef} autoPlay playsInline muted
+              <video {...localVideo.videoProps} muted
                 style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)', display: cameraOn ? 'block' : 'none' }} />
               {!cameraOn && (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

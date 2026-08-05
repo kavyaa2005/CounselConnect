@@ -67,6 +67,7 @@ Updated as work lands. Admin section pending the spec.
 - **Messages**: real socket presence (was `online: true` on every thread); call / video / overflow icons removed
 - **AI Assistant** alert buttons route to where their label says, carrying the patient
 - **Feedback replies reach the client** — with a notification
+- **Video calls fixed end to end**: full-viewport call surface (the client's call used to collapse into a strip inside the dashboard), remote video bound by callback ref with an explicit `play()`, the element no longer unmounted by a connection blip, recovery from a drop actually returns to "connected", session clock survives a blip, ring timeout, and Accept opens the call instantly from any screen
 
 ### Not done
 | # | Item | Notes |

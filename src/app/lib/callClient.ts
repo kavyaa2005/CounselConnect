@@ -24,6 +24,8 @@ const ICE_SERVERS: RTCIceServer[] = [
 const OFFER_RETRY_MS = 3000;
 const MAX_OFFER_RETRIES = 4;
 const CONNECT_TIMEOUT_MS = 30000;
+/** How long the caller keeps ringing before giving up. */
+const RING_TIMEOUT_MS = 45000;
 
 export type CallStatus =
   | 'idle' | 'calling' | 'ringing' | 'connecting' | 'connected' | 'ended';
@@ -134,13 +136,25 @@ export class CallSession {
   private remoteDescSet = false;
   private isCaller = false;
   private closed = false;
+  /** Has this call ever reached a connected state? */
   private connected = false;
+  /**
+   * Is it connected *right now*?
+   *
+   * Kept apart from `connected` deliberately. A brief ICE `disconnected` used
+   * to flip the UI to "Connecting…" and then never flip it back, because
+   * markConnected() early-returned on `connected` still being true. The call
+   * recovered underneath but the interface stayed on the connecting screen
+   * forever — which also unmounted the remote <video> for good.
+   */
+  private live = false;
 
   private cachedAnswer: RTCSessionDescriptionInit | null = null;
   private offerTimer: any = null;
   private offerAttempts = 0;
   private connectTimer: any = null;
   private mediaFallbackTimer: any = null;
+  private ringTimer: any = null;
 
   constructor(callbacks: CallCallbacks = {}) {
     this.cb = callbacks;
@@ -273,6 +287,7 @@ export class CallSession {
       this.diag(`ICE: ${pc.iceConnectionState}`);
       const s = pc.iceConnectionState;
       if (s === 'connected' || s === 'completed') this.markConnected();
+      if (s === 'disconnected') this.markInterrupted();
       if (s === 'failed') {
         try { (pc as any).restartIce?.(); } catch { /* older browsers */ }
       }
@@ -290,23 +305,35 @@ export class CallSession {
         );
         this.hardEnd();
       }
-      if (s === 'disconnected' && this.connected) {
-        this.cb.onStatus?.('connecting');
-      }
+      if (s === 'disconnected') this.markInterrupted();
     };
 
     this.pc = pc;
     return pc;
   }
 
-  /** Idempotent — whichever signal arrives first wins. */
+  /**
+   * Idempotent while the call is live, but it MUST fire again after a blip —
+   * otherwise the interface never comes back from "Connecting…".
+   */
   private markConnected() {
-    if (this.connected || this.closed) return;
+    if (this.closed || this.live) return;
+    const first = !this.connected;
     this.connected = true;
+    this.live = true;
+    this.stopRinging();
     this.stopOfferRetries();
     this.clearConnectTimeout();
-    this.diag('Connected.');
+    this.diag(first ? 'Connected.' : 'Reconnected.');
     this.cb.onStatus?.('connected');
+  }
+
+  /** A temporary drop. The call is not over; the UI just shouldn't claim it's fine. */
+  private markInterrupted() {
+    if (this.closed || !this.live) return;
+    this.live = false;
+    this.diag('Connection interrupted — trying to recover…');
+    this.cb.onStatus?.('connecting', { recovering: true });
   }
 
   private startConnectTimeout() {
@@ -325,6 +352,10 @@ export class CallSession {
 
   private stopOfferRetries() {
     if (this.offerTimer) { clearInterval(this.offerTimer); this.offerTimer = null; }
+  }
+
+  private stopRinging() {
+    if (this.ringTimer) { clearTimeout(this.ringTimer); this.ringTimer = null; }
   }
 
   /* ── outgoing ── */
@@ -356,6 +387,18 @@ export class CallSession {
         this.callId = res.callId;
         this.diag('Ringing…');
         this.cb.onStatus?.('calling', { peerName: res.peerName });
+
+        // Nothing used to stop the caller ringing. If the other side never
+        // picked up — or their accept was dropped — you sat on "Ringing…"
+        // indefinitely with no way to tell the difference from a hang.
+        this.stopRinging();
+        this.ringTimer = setTimeout(() => {
+          if (this.closed || this.connected) return;
+          this.diag('No answer.');
+          this.cb.onError?.(`${res.peerName || 'They'} didn't answer.`);
+          this.cancel();
+        }, RING_TIMEOUT_MS);
+
         resolve({ ok: true });
       });
     });
@@ -364,6 +407,7 @@ export class CallSession {
   /** Caller: they picked up — build the offer and keep re-sending until answered. */
   private handleAccepted = async ({ callId }: any) => {
     if (callId !== this.callId || this.closed) return;
+    this.stopRinging();
     this.diag('They answered. Negotiating…');
     this.cb.onStatus?.('connecting');
     this.startConnectTimeout();
@@ -664,6 +708,7 @@ export class CallSession {
 
   private cleanup() {
     this.closed = true;
+    this.stopRinging();
     this.stopOfferRetries();
     this.clearConnectTimeout();
     if (this.mediaFallbackTimer) { clearTimeout(this.mediaFallbackTimer); this.mediaFallbackTimer = null; }
@@ -683,6 +728,7 @@ export class CallSession {
     this.pendingIce = [];
     this.offerAttempts = 0;
     this.connected = false;
+    this.live = false;
   }
 
   /** Full teardown including socket listeners — call on unmount. */

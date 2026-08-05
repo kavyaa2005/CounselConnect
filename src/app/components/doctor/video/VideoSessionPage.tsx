@@ -13,7 +13,8 @@ import { useTheme } from '../ThemeContext';
 import { api } from '../../../lib/api';
 import { CallSession, getSocket, checkVideoSupport } from '../../../lib/callClient';
 import type { CallStatus, IncomingCall } from '../../../lib/callClient';
-import { takePendingCall } from '../../../lib/callInbox';
+import { takePendingCall, onPendingCall } from '../../../lib/callInbox';
+import { useMediaStream } from '../../../lib/useMediaStream';
 
 export function VideoSessionPage({ onNavigate, onCallStateChange }: {
   onNavigate: (page: string) => void;
@@ -53,8 +54,9 @@ export function VideoSessionPage({ onNavigate, onCallStateChange }: {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  // Callback-ref binding with an explicit play(). See lib/useMediaStream.ts.
+  const localVideo = useMediaStream(localStream);
+  const remoteVideo = useMediaStream(remoteStream);
   const sessionRef = useRef<CallSession | null>(null);
   const support = checkVideoSupport();
 
@@ -112,9 +114,28 @@ export function VideoSessionPage({ onNavigate, onCallStateChange }: {
   }, [contacts]);
 
   /* ─────────── timer ─────────── */
+  // Anchored to a start timestamp: a momentary drop used to send status back
+  // to 'connecting', which reset the session clock to 00:00 mid-call.
+  const startedAtRef = useRef<number | null>(null);
   useEffect(() => {
-    if (status !== 'connected') { setSeconds(0); return; }
-    const t = setInterval(() => setSeconds(s => s + 1), 1000);
+    if (status === 'connected' && startedAtRef.current === null) {
+      startedAtRef.current = Date.now();
+    }
+    if (status === 'idle' || status === 'ended') {
+      startedAtRef.current = null;
+      setSeconds(0);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    if (!['connected', 'connecting'].includes(status)) return;
+    const tick = () => {
+      if (startedAtRef.current !== null) {
+        setSeconds(Math.floor((Date.now() - startedAtRef.current) / 1000));
+      }
+    };
+    tick();
+    const t = setInterval(tick, 500);
     return () => clearInterval(t);
   }, [status]);
 
@@ -146,12 +167,6 @@ export function VideoSessionPage({ onNavigate, onCallStateChange }: {
 
   useEffect(() => () => { sessionRef.current?.destroy(); }, []);
 
-  useEffect(() => {
-    if (localVideoRef.current && localStream) localVideoRef.current.srcObject = localStream;
-  }, [localStream, status]);
-  useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
-  }, [remoteStream, status]);
 
   /* ─────────── placing a call ─────────── */
   async function startCall(contact: any, voiceOnly = false) {
@@ -195,6 +210,12 @@ export function VideoSessionPage({ onNavigate, onCallStateChange }: {
     setMicOn(true);
     setCameraOn(!voiceOnly);
     setCallError(null);
+    setDiagnostic('');
+    // Switch to the call screen on the click, not several seconds later.
+    // accept() awaits the socket and then getUserMedia — including the camera
+    // permission prompt — before emitting 'connecting', so answering used to
+    // leave the lobby on screen as if nothing had happened.
+    setStatus('connecting');
 
     const s = buildSession();
     try {
@@ -207,12 +228,16 @@ export function VideoSessionPage({ onNavigate, onCallStateChange }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildSession]);
 
-  // Handed off from the global ringer on another screen
+  /* Accepting from the global ringer.
+     Two paths: a call queued before this page existed is drained on mount, and
+     one accepted while this page is already open arrives by subscription —
+     the case the old mount-only read dropped silently. */
   useEffect(() => {
     const handed = takePendingCall();
     if (handed) answerCall(handed);
+    return onPendingCall(call => answerCall(call));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [answerCall]);
 
   const acceptIncoming = () => {
     if (!incoming) return;
@@ -470,8 +495,15 @@ export function VideoSessionPage({ onNavigate, onCallStateChange }: {
   }
 
   /* ═══════════════ IN CALL ═══════════════ */
+  // Fixed to the viewport rather than `height: 100%`, which resolves against a
+  // parent's *height* — and the page wrappers only set min-height, so it
+  // computed to `auto` and collapsed the call into a short strip.
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#0F1512', fontFamily: 'Inter' }}>
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9990,
+      display: 'flex', flexDirection: 'column',
+      background: '#0F1512', fontFamily: 'Inter',
+    }}>
       <div style={{ padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
         <div>
           <p style={{ color: 'white', fontWeight: 700, fontSize: 15, margin: 0 }}>{peer?.name}</p>
@@ -505,10 +537,24 @@ export function VideoSessionPage({ onNavigate, onCallStateChange }: {
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <div style={{ flex: 1, position: 'relative', background: '#0B0F0D' }}>
-          {status === 'connected' && !audioOnly ? (
-            <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          ) : (
-            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+          {/* Mounted for as long as there is a stream, whatever the status.
+              It used to be swapped out for the placeholder unless status was
+              exactly 'connected', so a momentary ICE drop destroyed the element
+              and lost the srcObject binding — a permanently black stage with
+              the timer still counting, which is what the screenshot showed. */}
+          {!audioOnly && remoteStream && (
+            <video
+              {...remoteVideo.videoProps}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#0B0F0D' }}
+            />
+          )}
+
+          {(audioOnly || !remoteStream || status !== 'connected') && (
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14,
+              background: '#0B0F0D',
+            }}>
               <motion.div
                 animate={status === 'connected' ? {} : { scale: [1, 1.06, 1] }}
                 transition={{ duration: 1.6, repeat: Infinity }}
@@ -519,10 +565,24 @@ export function VideoSessionPage({ onNavigate, onCallStateChange }: {
               <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, margin: 0 }}>
                 {status === 'calling' ? 'Ringing…'
                   : status === 'connecting' ? (diagnostic || 'Connecting…')
-                  : status === 'connected' ? 'Voice call in progress'
-                  : endedReason === 'you-hung-up' ? 'You ended the session' : 'Session ended'}
+                  : status === 'connected' && audioOnly ? 'Voice call in progress'
+                  : status === 'connected' ? 'Waiting for their video…'
+                  : endedReason === 'you-hung-up' ? 'You ended the session'
+                  : endedReason === 'declined' ? 'Call declined'
+                  : 'Session ended'}
               </p>
             </div>
+          )}
+
+          {remoteVideo.blocked && status === 'connected' && !audioOnly && (
+            <button onClick={remoteVideo.retry}
+              style={{
+                position: 'absolute', inset: 0, margin: 'auto', width: 210, height: 44,
+                borderRadius: 14, border: 'none', cursor: 'pointer',
+                background: 'rgba(255,255,255,0.92)', color: '#0F1512', fontWeight: 700, fontSize: 14,
+              }}>
+              Tap to start video
+            </button>
           )}
 
           {status === 'connected' && (peerState.muted || peerState.videoOff) && (
@@ -542,7 +602,7 @@ export function VideoSessionPage({ onNavigate, onCallStateChange }: {
 
           {!audioOnly && (
             <div style={{ position: 'absolute', bottom: 20, right: 20, width: 190, height: 130, borderRadius: 16, overflow: 'hidden', background: '#111', border: '2px solid rgba(255,255,255,0.12)' }}>
-              <video ref={localVideoRef} autoPlay playsInline muted
+              <video {...localVideo.videoProps} muted
                 style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)', display: cameraOn ? 'block' : 'none' }} />
               {!cameraOn && (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

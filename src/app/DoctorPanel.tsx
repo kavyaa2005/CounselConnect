@@ -167,9 +167,13 @@ export function DoctorPanel() {
           overflow: 'hidden',
         }}
       >
-        {/* Ring on any screen; the video page handles its own ringing */}
+        {/* Ring on any screen EXCEPT the video page, which shows its own
+            in-context banner. Suppressing only during `immersive` meant the
+            lobby showed two ringers at once, and accepting the global one
+            "navigated" to the page you were already on — no remount, so the
+            hand-off was never collected and the call silently never started. */}
         <IncomingCallRinger
-          suppressed={immersive}
+          suppressed={isVideoPage}
           theme={darkMode ? 'dark' : 'light'}
           onAccept={() => setCurrentPage('video')}
         />

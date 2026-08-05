@@ -42,5 +42,27 @@
     "status": "paid",
     "paidAt": "2026-08-03T17:27:43.390Z",
     "createdAt": "2026-08-03T17:27:43.390Z"
+  },
+  {
+    "id": "c0d3c013-c6d1-44d7-b8de-64cb9865bd64",
+    "receiptNumber": "CC-2026-5IHR33",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "appointmentId": "252f3b77-a7c7-4d9e-9de7-45f2932f750a",
+    "counselorId": "c1",
+    "counselorName": "Dr. Sarah Chen",
+    "sessionType": "video",
+    "sessionDate": "August 6, 2026",
+    "sessionTime": "11:00 AM",
+    "amount": 80,
+    "currency": "USD",
+    "platformFee": 16,
+    "counselorPayout": 64,
+    "method": "upi",
+    "methodLabel": "UPI",
+    "gatewayReference": "SIM-BD0A526A-751",
+    "simulated": true,
+    "status": "paid",
+    "paidAt": "2026-08-05T06:45:15.022Z",
+    "createdAt": "2026-08-05T06:45:15.022Z"
   }
 ]

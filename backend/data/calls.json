@@ -26,5 +26,61 @@
     "endedAt": "2026-07-25T06:17:48.668Z",
     "durationSec": 18,
     "createdAt": "2026-07-25T06:17:21.405Z"
+  },
+  {
+    "id": "d62868ce-5333-4ede-b55b-db207f8f0826",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "doctorId": "d1",
+    "counselorId": "c1",
+    "userName": "Farhan",
+    "doctorName": "Dr. Sarah Chen",
+    "initiatedBy": "doctor",
+    "status": "ended",
+    "startedAt": "2026-08-05T05:12:02.375Z",
+    "endedAt": "2026-08-05T05:12:17.710Z",
+    "durationSec": 15,
+    "createdAt": "2026-08-05T05:11:58.563Z"
+  },
+  {
+    "id": "c3aaed07-b7a4-4a42-9d97-422db2874d08",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "doctorId": "d1",
+    "counselorId": "c1",
+    "userName": "Farhan",
+    "doctorName": "Dr. Sarah Chen",
+    "initiatedBy": "user",
+    "status": "cancelled",
+    "startedAt": null,
+    "endedAt": "2026-08-05T05:12:20.696Z",
+    "durationSec": 0,
+    "createdAt": "2026-08-05T05:12:06.274Z"
+  },
+  {
+    "id": "062f0f70-3766-4c9a-829a-a0b855810214",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "doctorId": "d1",
+    "counselorId": "c1",
+    "userName": "Farhan",
+    "doctorName": "Dr. Sarah Chen",
+    "initiatedBy": "doctor",
+    "status": "ended",
+    "startedAt": "2026-08-05T06:46:20.273Z",
+    "endedAt": "2026-08-05T06:48:19.140Z",
+    "durationSec": 119,
+    "createdAt": "2026-08-05T06:46:17.233Z"
+  },
+  {
+    "id": "99e16f74-3acf-41c7-938a-031a5d2c6cae",
+    "userId": "2bdb4856-efc3-4611-a968-150841df0f42",
+    "doctorId": "d1",
+    "counselorId": "c1",
+    "userName": "Farhan",
+    "doctorName": "Dr. Sarah Chen",
+    "initiatedBy": "user",
+    "status": "ended",
+    "startedAt": "2026-08-05T06:53:02.583Z",
+    "endedAt": "2026-08-05T06:48:29.253Z",
+    "durationSec": 0,
+    "createdAt": "2026-08-05T06:46:26.454Z"
   }
 ]
