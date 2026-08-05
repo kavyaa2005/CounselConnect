@@ -126,4 +126,5 @@ See `DATABASE.md` for setup.
 | # | Item | Notes |
 |---|---|---|
 | DB1 | **Single-process assumption** | Reads are served from an in-process cache loaded at boot; writes go straight to MongoDB. Correct for one backend instance. Running several would need the services converted to async/await against the driver. |
-| DB2 | **Not verified against a real mongod** | The sandbox could not download a MongoDB binary. The store is tested against the real driver's BSON encoder and a stand-in for the driver surface; the live database itself needs one run on a machine with MongoDB installed. |
+| DB2 | ~~Not verified against a real mongod~~ **CLOSED** | Verified on the user's PC 5 Aug 2026: MongoDB 8.0 + Compass 1.49.12, all 21 collections created and all 198 documents imported with counts matching exactly. |
+| DB3 | **Silent fallback can split the data** | If MongoDB is not running at boot, the server starts on the JSON files and anything created that session is written there, not to MongoDB — and the importer only fills *empty* collections, so it is never merged back. `MONGODB_REQUIRED=true` in `backend/.env` turns this into a startup error instead. |
