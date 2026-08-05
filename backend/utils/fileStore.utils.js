@@ -40,6 +40,20 @@ const STORE_FILES = [
   'users.json',
 ];
 
+/**
+ * The stores that are key/value maps rather than lists.
+ *
+ * Stated explicitly rather than inferred from whatever the file happens to
+ * contain: an empty `{}` and an empty `[]` are indistinguishable once written,
+ * and guessing wrong would silently change a store's shape on export.
+ */
+const OBJECT_STORES = new Set([
+  'availability.json',
+  'messages.json',
+  'notification-reads.json',
+  'settings.json',
+]);
+
 /* ─────────────────────────── file fallback ─────────────────────────── */
 
 const readFile = (filename, empty) => {
@@ -156,5 +170,7 @@ const storeStats = () => mongo.stats();
 module.exports = {
   readStore, writeStore, readStoreObj, writeStoreObj,
   initStore, closeStore, usingMongo, storeStats, flushStore: () => mongo.flush(),
-  STORE_FILES, DATA_DIR,
+  STORE_FILES, OBJECT_STORES, DATA_DIR,
+  /** Direct file write, bypassing MongoDB — used by the export script. */
+  writeFileDirect: writeFile,
 };

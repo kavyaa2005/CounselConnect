@@ -9,7 +9,8 @@
     "dev": "nodemon server.js",
     "seed": "node seed.js",
     "db:status": "node scripts/db-status.js",
-    "db:import": "node scripts/db-import.js"
+    "db:import": "node scripts/db-import.js",
+    "db:export": "node scripts/db-export.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

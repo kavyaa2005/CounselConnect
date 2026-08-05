@@ -85,10 +85,19 @@ demo.
 
 ```bash
 npm run db:status        # connection + a document count per collection
+npm run db:export        # write MongoDB back out to backend/data/*.json
 npm run db:import        # re-import the JSON files into empty collections
 npm run db:import -- --force   # overwrite collections with the JSON snapshot
 npm run seed             # recreate the demo logins
 ```
+
+### Sharing the project
+
+`backend/data/*.json` is a snapshot, not the live database, so it goes stale as
+soon as you use the app. **Run `npm run db:export` before zipping the project**
+— it writes the current database back into those files so they travel with the
+zip. The person who unzips it gets everything imported on their first run.
+See [HOW-TO-RUN.md](HOW-TO-RUN.md).
 
 You can also check from the browser: <http://localhost:5000/api/health> reports
 the engine, database name, collection count and document count.

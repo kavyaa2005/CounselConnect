@@ -67,6 +67,10 @@ echo      Database : MongoDB      = saving to MongoDB
 echo      Database : JSON files   = MongoDB is NOT running
 echo.
 echo    Leave both windows open. Ctrl+C in a window stops it.
+echo.
+echo    SENDING THIS PROJECT TO SOMEONE? Run this first:
+echo      cd backend  ^&^&  npm run db:export
+echo    Otherwise the zip carries stale data.
 echo  ================================================
 echo.
 pause
