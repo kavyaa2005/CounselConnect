@@ -88,7 +88,15 @@ function attachSignaling(httpServer) {
         const online = [];
         for (const c of contacts) {
           const sockets = await io.in(roomFor(c.role, c.id)).fetchSockets();
-          if (sockets.length) online.push({ id: c.id, role: c.role });
+          // Plain string ids, NOT { id, role } objects.
+          //
+          // Every client does `new Set(res.online)` and then checks
+          // `onlineIds.has(contact.id)` with a string. A Set built from objects
+          // can never match a string, so the initial presence snapshot always
+          // came back empty and everybody showed as offline — which also made
+          // the call buttons unclickable. The `presence:update` event already
+          // sends bare ids, so this makes both paths agree.
+          if (sockets.length) online.push(c.id);
         }
         if (typeof ack === 'function') ack({ online });
       } catch {
