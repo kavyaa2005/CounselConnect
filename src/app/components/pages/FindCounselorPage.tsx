@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Star, Filter, X, Calendar, MessageCircle, Video } from 'lucide-react';
 import { CC } from '../../lib/colors';
-import { api } from '../../lib/api';
+import { api, fileUrl } from '../../lib/api';
+import { useMoney } from '../../lib/money';
 
 const specialties = ['All', 'Anxiety', 'Depression', 'Trauma', 'Stress', 'Relationships', 'Burnout', 'Grief', 'Self-esteem'];
 const languages = ['English', 'Spanish', 'French', 'Mandarin', 'Arabic'];
@@ -18,6 +19,8 @@ const SORTS = [
 ];
 
 export function FindCounselorPage() {
+  // Currency follows the server (the gateway charges in ₹), never a literal '$'.
+  const { money } = useMoney();
   const navigate = useNavigate();
   const [counselors, setCounselors] = useState<any[]>([]);
   const [search, setSearch] = useState('');
@@ -167,7 +170,7 @@ export function FindCounselorPage() {
               onClick={() => openProfile(c.id)}
             >
               <div className="relative h-48 flex-shrink-0">
-                <img src={c.image} alt={c.name} className="w-full h-full object-cover" />
+                <img src={fileUrl(c.image)} alt={c.name} className="w-full h-full object-cover" />
                 <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, transparent 40%, rgba(35,49,45,0.6))' }} />
                 <div className="absolute top-3 right-3 flex gap-2">
                   <span
@@ -191,7 +194,7 @@ export function FindCounselorPage() {
               <div className="p-5">
                 <div className="flex items-center justify-between mb-3">
                   <span style={{ fontSize: '0.8rem', color: CC.mutedOlive }}>{c.experience} experience</span>
-                  <span style={{ fontWeight: 700, color: CC.forestSage, fontSize: '0.9rem' }}>${c.price}/session</span>
+                  <span style={{ fontWeight: 700, color: CC.forestSage, fontSize: '0.9rem' }}>{money(c.price)}/session</span>
                 </div>
                 <p style={{ fontSize: '0.82rem', color: CC.mutedOlive, lineHeight: 1.6, marginBottom: 14 }}>{c.bio.slice(0, 80)}...</p>
                 <div className="flex gap-2">
@@ -238,7 +241,7 @@ export function FindCounselorPage() {
               onClick={e => e.stopPropagation()}
             >
               <div className="relative h-48">
-                <img src={selectedCounselor.image} alt={selectedCounselor.name} className="w-full h-full object-cover" />
+                <img src={fileUrl(selectedCounselor.image)} alt={selectedCounselor.name} className="w-full h-full object-cover" />
                 <button
                   onClick={closeProfile}
                   className="absolute top-4 right-4 p-2 rounded-full"

@@ -3,6 +3,7 @@
 // Streams straight to the HTTP response — nothing is written to disk.
 
 const PDFDocument = require('pdfkit');
+const { money, moneyShort, symbol } = require('../utils/money.utils');
 
 const BRAND = {
   primary: '#355C4D',
@@ -388,7 +389,7 @@ function streamAppointmentSummary(res, { appointment, patient, doctor, notes = [
     ['Status', String(appointment.status || 'confirmed').replace(/^./, (m) => m.toUpperCase())],
     ['Presenting concern', patient.reason || 'General wellbeing'],
     ['Booked on', fmtDate(appointment.createdAt)],
-    ['Fee', appointment.price != null ? `$${appointment.price}` : '—'],
+    ['Fee', appointment.price != null ? moneyShort(appointment.price) : '—'],
   ]);
   doc.moveDown(0.6);
 
@@ -526,7 +527,7 @@ function streamPracticeReport(res, { doctor, totals, patients = [], feedback, ap
     ['Sessions', totals.totalAppointments ?? 0],
     ['Avg rating', totals.avgRating != null ? `${totals.avgRating}/5` : '—'],
     ['Avg mood', totals.avgMood != null ? `${totals.avgMood}/10` : '—'],
-    ['Revenue (mo)', `$${(totals.monthlyRevenue ?? 0).toLocaleString()}`],
+    ['Revenue (mo)', moneyShort(totals.monthlyRevenue ?? 0)],
   ]);
   doc.moveDown(0.4);
 
@@ -534,7 +535,7 @@ function streamPracticeReport(res, { doctor, totals, patients = [], feedback, ap
   if (revenue.length) {
     heading(doc, left, contentW, 'Revenue by month');
     detailTable(doc, left, contentW,
-      revenue.map((r) => [r.month, `$${Number(r.revenue || 0).toLocaleString()}`]));
+      revenue.map((r) => [r.month, moneyShort(r.revenue || 0)]));
     doc.moveDown(0.5);
   }
 
@@ -664,7 +665,7 @@ function streamAppointmentDetails(res, { appointment, client, counselor, payment
     ...(appointment.rescheduledAt
       ? [['Rescheduled', `${fmtDate(appointment.rescheduledAt)} (moved ${appointment.rescheduleCount}×)`]]
       : []),
-    ['Fee', appointment.price != null ? `$${appointment.price}` : '—'],
+    ['Fee', appointment.price != null ? moneyShort(appointment.price) : '—'],
     ['Payment', payment ? `Paid ${fmtDate(payment.createdAt)}` : 'Due at checkout'],
   ]);
   doc.moveDown(0.8);

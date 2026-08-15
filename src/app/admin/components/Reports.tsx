@@ -4,6 +4,7 @@ import { FileText, Download, TrendingUp, Users, Calendar, DollarSign, Star, Chec
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { useTheme } from "../context/ThemeContext";
 import { adminApi, useAdminData } from "../lib/adminApi";
+import { useMoney } from "../../lib/money";
 
 // Icon + palette per report id returned by the API
 const REPORT_STYLE: Record<string, { icon: any; color: string; bg: string }> = {
@@ -17,6 +18,8 @@ const REPORT_STYLE: Record<string, { icon: any; color: string; bg: string }> = {
 type GenerateState = "idle" | "loading" | "done";
 
 export function Reports(_props?: any) {
+  // Currency follows the server (the gateway charges in ₹), never a literal '$'.
+  const { money, symbol } = useMoney();
   const { t } = useTheme();
   const { data, loading, error, refetch } = useAdminData(adminApi.reports);
   const { data: analytics } = useAdminData(adminApi.analytics);
@@ -92,7 +95,7 @@ export function Reports(_props?: any) {
           { label: "Users", value: highlights.totalUsers ?? 0, color: "#5E8B7E", bg: "#F0F7F5" },
           { label: "Counselors", value: highlights.totalCounselors ?? 0, color: "#2D6A4F", bg: "#E8F5ED" },
           { label: "Appointments", value: highlights.totalAppointments ?? 0, color: "#42A5F5", bg: "#EBF5FF" },
-          { label: "Revenue", value: `$${(highlights.totalRevenue ?? 0).toLocaleString()}`, color: "#D8A48F", bg: "#FDF3EE" },
+          { label: "Revenue", value: money(highlights.totalRevenue ?? 0), color: "#D8A48F", bg: "#FDF3EE" },
           { label: "Avg Rating", value: highlights.averageRating ?? "0.0", color: "#FFC107", bg: "#FFF9E8" },
           { label: "Completion", value: `${highlights.completionRate ?? 0}%`, color: "#8B5CF6", bg: "#F5F3FF" },
         ].map((s, i) => (

@@ -3,6 +3,33 @@
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+/** Where the API lives, e.g. `https://counselconnect-api.onrender.com/api`. */
+export const API_BASE = BASE_URL;
+
+/**
+ * The server's origin, without the `/api` suffix — where uploaded files are
+ * served from (`/uploads/...`).
+ */
+export const SERVER_ORIGIN = BASE_URL.replace(/\/api\/?$/, '');
+
+/**
+ * Turns a stored file path into a URL the browser can load.
+ *
+ * Paths are saved as `/uploads/avatars/x.png`, which is relative to the API
+ * server, not to the site. On localhost the two happened to be interchangeable,
+ * which hid the problem; once the frontend is on Vercel and the API on Render
+ * they are different hosts, and anything that pasted `http://localhost:5000` in
+ * front of the path points at the visitor's own machine — a broken image for
+ * everyone, and a blocked mixed-content request on an https page.
+ *
+ * Absolute URLs (seed avatars from Unsplash) are passed through untouched.
+ */
+export const fileUrl = (p?: string | null): string => {
+  if (!p) return '';
+  if (/^(https?:)?\/\//i.test(p) || p.startsWith('data:')) return p;
+  return `${SERVER_ORIGIN}${p.startsWith('/') ? p : `/${p}`}`;
+};
+
 const getToken = (): string | null => localStorage.getItem('cc_token');
 
 const request = async <T = any>(

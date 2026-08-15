@@ -31,10 +31,19 @@ const assertSlotIsFree = (counselorId, dateTime, ignoreId = null) => {
   return when;
 };
 
+/**
+ * @param {object} opts
+ * @param {boolean} opts.prepaid  Booked through the payment gateway, with the
+ *   money already verified. Such a booking is confirmed immediately rather
+ *   than sitting in the counselor's request queue — charging someone and then
+ *   telling them to wait for approval is the wrong order. Every other rule
+ *   (slot conflicts, vacation mode, break times, auto-reject) still applies,
+ *   and is checked *before* the payment is ever taken.
+ */
 const bookAppointment = (userId, {
   counselorId, counselorName, counselorAvatar, sessionType,
   date, time, price, mode, reason, documents,
-}) => {
+}, opts = {}) => {
   const appointments = readStore('appointments.json');
 
   const when = assertSlotIsFree(counselorId, `${date} ${time}`);
@@ -79,15 +88,16 @@ const bookAppointment = (userId, {
     reason: String(reason || '').trim(),
     // Files the client attached when booking (intake forms, prior reports)
     documents: Array.isArray(documents) ? documents : [],
-    // A client booking is a *request*. The counselor accepts or rejects it —
-    // this is the step the whole doctor-side Accept/Reject UI was built for
-    // but which nothing was ever creating.
-    status: 'pending', // pending | confirmed | rejected | cancelled | completed
+    // A client booking is normally a *request* the counselor accepts or
+    // rejects. A prepaid booking skips that step: the seat is paid for, so it
+    // is confirmed on the spot. The counselor can still cancel, which refunds
+    // automatically.
+    status: opts.prepaid ? 'confirmed' : 'pending', // pending | confirmed | rejected | cancelled | completed
     // Flagged when the request sits outside the counselor's stated hours and
     // they've chosen to review those by hand rather than auto-decline.
     outsideHours: bookable.ok ? null : bookable.reason,
-    // Nothing is charged until the counselor accepts.
-    paymentStatus: 'unpaid', // unpaid | paid | refunded
+    paymentStatus: opts.prepaid ? 'paid' : 'unpaid', // unpaid | paid | refunded
+    ...(opts.prepaid ? { acceptedAt: new Date().toISOString(), prepaid: true } : {}),
     createdAt: new Date().toISOString(),
   };
 

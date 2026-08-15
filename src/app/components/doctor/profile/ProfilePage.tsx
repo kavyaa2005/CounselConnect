@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Camera, Plus, X, Star, Award, Globe, Phone, Mail, MapPin, Clock } from 'lucide-react';
 import { useTheme } from '../ThemeContext';
-import { api } from '../../../lib/api';
+import { api, fileUrl } from '../../../lib/api';
+import { useMoney } from '../../../lib/money';
 
 const specializations = ['Clinical Psychology', 'Cognitive Behavioral Therapy', 'EMDR', 'Trauma Therapy', 'Mindfulness-Based CBT'];
 const languages = ['English', 'Spanish', 'French'];
@@ -20,6 +21,8 @@ const awards = [
 ];
 
 export function ProfilePage() {
+  // Currency follows the server (the gateway charges in ₹), never a literal '$'.
+  const { money, symbol } = useMoney();
   const { c: colors, sh: shadows } = useTheme();
   const [activeTab, setActiveTab] = useState('personal');
   const [editing, setEditing] = useState(false);
@@ -99,8 +102,7 @@ export function ProfilePage() {
           <div style={{ position: 'relative', display: 'inline-block', marginBottom: 16 }}>
             {profile?.image ? (
               <img
-                src={profile.image.startsWith('http') ? profile.image
-                  : `${(import.meta as any).env.VITE_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5000'}${profile.image}`}
+                src={fileUrl(profile.image)}
                 alt={profile?.name || 'Profile'}
                 style={{ width: 90, height: 90, borderRadius: '50%', objectFit: 'cover', display: 'block', margin: '0 auto' }}
               />
@@ -193,7 +195,7 @@ export function ProfilePage() {
                 { label: 'Email', key: 'email', value: profile?.email || '—', editable: false },
                 { label: 'Phone', key: 'phone', value: profile?.phone || 'Not set', editable: true },
                 { label: 'Specialty', key: 'specialty', value: profile?.specialty || '—', editable: false },
-                { label: 'Consultation Fee', key: 'price', value: profile?.price ? `$${profile.price}/session` : '—', editable: true },
+                { label: 'Consultation Fee', key: 'price', value: profile?.price ? `${money(profile.price)}/session` : '—', editable: true },
                 { label: 'Qualifications', key: 'qualification', value: profile?.qualification || 'Not set', editable: true },
                 { label: 'Licence / registration', key: 'licenseNumber', value: profile?.licenseNumber || 'Not set', editable: true },
                 { label: 'Experience', key: 'experience', value: profile?.experience || 'Not set', editable: true },

@@ -34,6 +34,7 @@ const STORE_FILES = [
   'notification-reads.json',
   'notifications-read.json',
   'notifications.json',
+  'payment-intents.json',
   'payments.json',
   'platform-notifications.json',
   'settings.json',

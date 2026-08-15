@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 import { adminApi, useAdminData } from "../lib/adminApi";
+import { useMoney } from "../../lib/money";
 
 const statusStyle: Record<string, { bg: string; color: string; label: string }> = {
   pending:  { bg: "#FFF9E8", color: "#F59E0B", label: "Pending review" },
@@ -14,6 +15,8 @@ const statusStyle: Record<string, { bg: string; color: string; label: string }> 
 };
 
 export function Applications({ pageAction, onActionConsumed }: { pageAction?: string | null; onActionConsumed?: () => void } = {}) {
+  // Currency follows the server (the gateway charges in ₹), never a literal '$'.
+  const { money, symbol } = useMoney();
   const { t } = useTheme();
   const { data, loading, error, refetch } = useAdminData(adminApi.applications);
 
@@ -331,7 +334,7 @@ export function Applications({ pageAction, onActionConsumed }: { pageAction?: st
                       { icon: Phone, label: "Phone", value: selected.phone || "—" },
                       { icon: MapPin, label: "Location", value: selected.location || "—" },
                       { icon: Languages, label: "Languages", value: (selected.languages || []).join(", ") || "—" },
-                      { icon: IndianRupee, label: "Session fee", value: `$${selected.price}` },
+                      { icon: IndianRupee, label: "Session fee", value: money(selected.price) },
                     ].map(({ icon: Icon, label, value }) => (
                       <div key={label} className="flex items-center gap-3 p-2.5 rounded-xl" style={{ background: t.card2 }}>
                         <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: "#5E8B7E" }} />

@@ -13,6 +13,7 @@ import {
 import { useTheme } from "../context/ThemeContext";
 import { adminApi, useAdminData } from "../lib/adminApi";
 import { getUser } from "../../lib/auth";
+import { SERVER_ORIGIN } from '../../lib/api';
 
 // Presentation for each live stat, keyed by the `key` the API returns.
 const STAT_STYLE: Record<string, { icon: any; color: string; bg: string }> = {
@@ -119,8 +120,10 @@ export function Dashboard({ onNavigate }: { onNavigate?: (p: any, a?: string) =>
           <div>
             <p className="font-semibold text-sm" style={{ color: t.text }}>Couldn't load the dashboard</p>
             <p className="text-xs mt-1" style={{ color: t.muted }}>{error}</p>
+            {/* Naming the real API host matters once this is deployed: telling
+                someone on a live site to check localhost sends them nowhere. */}
             <p className="text-xs mt-2" style={{ color: t.muted }}>
-              Make sure the backend is running at <code>http://localhost:5000</code>.
+              Make sure the backend is reachable at <code>{SERVER_ORIGIN}</code>.
             </p>
             <button onClick={refetch} className="mt-3 px-3 py-1.5 rounded-xl text-xs font-semibold text-white"
               style={{ background: "#5E8B7E" }}>Try again</button>

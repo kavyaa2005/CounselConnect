@@ -11,7 +11,7 @@ import {
   Clock, Send, Search, AlertCircle, Loader2, CheckCircle, History, Phone, ArrowLeft,
 } from 'lucide-react';
 import { CC } from '../../lib/colors';
-import { api } from '../../lib/api';
+import { api, fileUrl } from '../../lib/api';
 import { CallSession, getSocket, checkVideoSupport } from '../../lib/callClient';
 import type { CallStatus, IncomingCall } from '../../lib/callClient';
 import { takePendingCall, onPendingCall } from '../../lib/callInbox';
@@ -427,7 +427,7 @@ export function VideoPage() {
                 <div key={c.id} className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: `1px solid ${CC.softSage}66` }}>
                   <div className="relative shrink-0">
                     {c.avatar
-                      ? <img src={c.avatar} alt={c.name} className="w-11 h-11 rounded-2xl object-cover" />
+                      ? <img src={fileUrl(c.avatar)} alt={c.name} className="w-11 h-11 rounded-2xl object-cover" />
                       : <div className="w-11 h-11 rounded-2xl flex items-center justify-center"
                           style={{ background: CC.softSage, color: CC.forestSage, fontWeight: 700 }}>
                           {c.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}

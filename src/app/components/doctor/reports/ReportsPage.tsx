@@ -7,10 +7,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../ThemeContext';
 import { colors as staticColors } from '../colors';
 import { api } from '../../../lib/api';
+import { useMoney } from '../../../lib/money';
 
 const PIE_COLORS = [staticColors.primary, '#7C6FFF', staticColors.warning, '#E91E8C', staticColors.success, staticColors.textMuted];
 
 export function ReportsPage() {
+  // Currency follows the server (the gateway charges in ₹), never a literal '$'.
+  const { money, symbol } = useMoney();
   const { c: colors, sh: shadows } = useTheme();
   const [analytics, setAnalytics] = useState<any>(null);
   const [patients, setPatients] = useState<any[]>([]);
@@ -135,7 +138,7 @@ export function ReportsPage() {
           { label: 'Total Sessions', value: String(totals.totalAppointments ?? 0), icon: Calendar, change: 'booked', color: '#7C6FFF' },
           { label: 'Avg Rating', value: totals.avgRating != null ? `${totals.avgRating}★` : '—', icon: Star, change: `${totals.reviewCount ?? 0} reviews`, color: colors.warning },
           { label: 'Avg Mood', value: totals.avgMood != null ? `${totals.avgMood}/10` : '—', icon: TrendingUp, change: 'all patients', color: colors.success },
-          { label: 'Revenue (mo)', value: `$${(totals.monthlyRevenue ?? 0).toLocaleString()}`, icon: Clock, change: 'this month', color: '#E91E8C' },
+          { label: 'Revenue (mo)', value: money(totals.monthlyRevenue ?? 0), icon: Clock, change: 'this month', color: '#E91E8C' },
         ].map((kpi, i) => {
           const Icon = kpi.icon;
           return (
@@ -166,7 +169,7 @@ export function ReportsPage() {
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontFamily: 'Inter', fontSize: 22, fontWeight: 800, color: '#7C6FFF' }}>
-                ${revenueMonthly.reduce((sum: number, r: any) => sum + Number(r.revenue || 0), 0).toLocaleString()}
+                {money(revenueMonthly.reduce((sum: number, r: any) => sum + Number(r.revenue || 0), 0))}
               </div>
               <div style={{ fontFamily: 'Inter', fontSize: 11, color: colors.textMuted }}>{period.toLowerCase()}</div>
             </div>
@@ -175,9 +178,9 @@ export function ReportsPage() {
             <BarChart data={revenueMonthly}>
               <CartesianGrid strokeDasharray="3 3" stroke={colors.border} vertical={false} />
               <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 12, fill: colors.textMuted }} />
-              <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 12, fill: colors.textMuted }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
+              <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 12, fill: colors.textMuted }} tickFormatter={v => `${symbol}${(v/1000).toFixed(0)}k`} />
               <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 12, fill: colors.textMuted }} />
-              <Tooltip contentStyle={{ borderRadius: 12, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 12 }} formatter={(v: number, name) => [name === 'revenue' ? `$${v.toLocaleString()}` : v, name === 'revenue' ? 'Revenue' : 'Sessions']} />
+              <Tooltip contentStyle={{ borderRadius: 12, border: `1px solid ${colors.border}`, fontFamily: 'Inter', fontSize: 12 }} formatter={(v: number, name) => [name === 'revenue' ? money(v) : v, name === 'revenue' ? 'Revenue' : 'Sessions']} />
               <Bar yAxisId="left" dataKey="revenue" fill="#7C6FFF" radius={[6, 6, 0, 0]} opacity={0.85} />
               <Bar yAxisId="right" dataKey="sessions" fill={colors.lightSage} radius={[6, 6, 0, 0]} opacity={0.85} />
             </BarChart>

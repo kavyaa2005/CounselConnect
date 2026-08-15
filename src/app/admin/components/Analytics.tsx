@@ -4,14 +4,19 @@ import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
-import { Download, TrendingUp, Users, Calendar, DollarSign, ArrowUpRight, ArrowDownRight } from "lucide-react";
+// Wallet rather than DollarSign: the platform bills in whatever currency the
+// gateway is configured for, so a dollar glyph beside a ₹ figure would lie.
+import { Download, TrendingUp, Users, Calendar, Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 import { adminApi, useAdminData, exportCsv } from "../lib/adminApi";
+import { useMoney } from "../../lib/money";
 
 const RANGE_MONTHS: Record<string, number> = { "3M": 3, "6M": 6, "1Y": 12 };
 const ranges = ["3M", "6M", "1Y"];
 
 export function Analytics(_props?: any) {
+  // Currency follows the server (the gateway charges in ₹), never a literal '$'.
+  const { money, symbol } = useMoney();
   const { t } = useTheme();
   const { data, loading, error, refetch } = useAdminData(adminApi.analytics);
   const { data: pay } = useAdminData(adminApi.payments);
@@ -56,7 +61,7 @@ export function Analytics(_props?: any) {
     { label: "User Growth Rate", value: `${Number(growthRate) >= 0 ? "+" : ""}${growthRate}%`, sub: "vs last month", up: Number(growthRate) >= 0, icon: TrendingUp, color: "#5E8B7E", bg: "#F0F7F5" },
     { label: "Total Users", value: retention.totalUsers.toLocaleString(), sub: `+${newThisMonth} this month`, up: newThisMonth >= 0, icon: Users, color: "#42A5F5", bg: "#EBF5FF" },
     { label: "Session Completion", value: `${retention.completionRate}%`, sub: `${retention.cancellationRate}% cancelled`, up: retention.completionRate >= 50, icon: Calendar, color: "#4CAF50", bg: "#EAF7EA" },
-    { label: "Revenue / User", value: `$${revenuePerUser}`, sub: `${retention.activeUsers} active users`, up: true, icon: DollarSign, color: "#D8A48F", bg: "#FDF3EE" },
+    { label: "Revenue / User", value: money(revenuePerUser), sub: `${retention.activeUsers} active users`, up: true, icon: Wallet, color: "#D8A48F", bg: "#FDF3EE" },
   ];
 
   function handleExport() {
@@ -230,8 +235,8 @@ export function Analytics(_props?: any) {
               <CartesianGrid strokeDasharray="3 3" stroke={t.border} vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 11, fill: t.muted }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: t.muted }} axisLine={false} tickLine={false}
-                tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip content={<CustomTooltip />} formatter={(v: any) => `$${Number(v).toLocaleString()}`} />
+                tickFormatter={v => `${symbol}${(v / 1000).toFixed(0)}k`} />
+              <Tooltip content={<CustomTooltip />} formatter={(v: any) => money(v)} />
               <Area type="monotone" dataKey="revenue" stroke="#D8A48F" strokeWidth={2.5} fill="url(#aRevGrad)" name="Revenue" dot={false} />
             </AreaChart>
           </ResponsiveContainer>

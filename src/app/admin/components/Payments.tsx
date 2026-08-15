@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { DollarSign, TrendingUp, CreditCard, RefreshCw, Download, ArrowUpRight, ArrowDownRight } from "lucide-react";
+// Wallet rather than DollarSign: the platform bills in whatever currency the
+// gateway is configured for, so a dollar glyph beside a ₹ figure would lie.
+import { Wallet, TrendingUp, CreditCard, RefreshCw, Download, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useTheme } from "../context/ThemeContext";
 import { adminApi, useAdminData, exportCsv } from "../lib/adminApi";
+import { useMoney } from "../../lib/money";
 
 const statusColors: Record<string, { bg: string; color: string }> = {
   Paid: { bg: "#EAF7EA", color: "#4CAF50" },
@@ -13,6 +16,8 @@ const statusColors: Record<string, { bg: string; color: string }> = {
 };
 
 export function Payments(_props?: any) {
+  // Currency follows the server (the gateway charges in ₹), never a literal '$'.
+  const { money, symbol } = useMoney();
   const { t } = useTheme();
   const { data, loading, error, refetch } = useAdminData(adminApi.payments);
   const [filterStatus, setFilterStatus] = useState("All");
@@ -42,7 +47,7 @@ export function Payments(_props?: any) {
         <p className="font-semibold mb-1" style={{ color: t.text }}>{label}</p>
         {payload.map((p: any) => (
           <p key={p.name} style={{ color: p.color }}>
-            {p.name}: <strong>${Number(p.value).toLocaleString()}</strong>
+            {p.name}: <strong>{money(p.value)}</strong>
           </p>
         ))}
       </div>
@@ -76,7 +81,7 @@ export function Payments(_props?: any) {
         <div>
           <h2 className="font-bold text-xl" style={{ color: t.text, fontFamily: "'Poppins', sans-serif" }}>Payments</h2>
           <p className="text-sm mt-0.5" style={{ color: t.muted }}>
-            {summary.count} transaction{summary.count === 1 ? "" : "s"} · counselor payouts ${summary.payouts.toLocaleString()} · platform fee ${summary.platformFee.toLocaleString()}
+            {summary.count} transaction{summary.count === 1 ? "" : "s"} · counselor payouts {money(summary.payouts)} · platform fee {money(summary.platformFee)}
           </p>
         </div>
         <button onClick={handleExport}
@@ -89,10 +94,10 @@ export function Payments(_props?: any) {
       {/* Stats */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         {[
-          { label: "Total Revenue", value: `$${totalRevenue.toLocaleString()}`, change: `${summary.count} txns`, up: true, icon: DollarSign, color: "#5E8B7E", bg: "#F0F7F5" },
-          { label: "Counselor Payouts", value: `$${summary.payouts.toLocaleString()}`, change: "80% share", up: true, icon: TrendingUp, color: "#2D6A4F", bg: "#E8F5ED" },
-          { label: "Refunded", value: `$${totalRefunds.toLocaleString()}`, change: "cancelled", up: false, icon: RefreshCw, color: "#42A5F5", bg: "#EBF5FF" },
-          { label: "Avg per Session", value: `$${avgPerSession}`, change: "all time", up: true, icon: CreditCard, color: "#D8A48F", bg: "#FDF3EE" },
+          { label: "Total Revenue", value: money(totalRevenue), change: `${summary.count} txns`, up: true, icon: Wallet, color: "#5E8B7E", bg: "#F0F7F5" },
+          { label: "Counselor Payouts", value: money(summary.payouts), change: "80% share", up: true, icon: TrendingUp, color: "#2D6A4F", bg: "#E8F5ED" },
+          { label: "Refunded", value: money(totalRefunds), change: "cancelled", up: false, icon: RefreshCw, color: "#42A5F5", bg: "#EBF5FF" },
+          { label: "Avg per Session", value: money(avgPerSession), change: "all time", up: true, icon: CreditCard, color: "#D8A48F", bg: "#FDF3EE" },
         ].map((s, i) => {
           const Icon = s.icon;
           return (
@@ -135,7 +140,7 @@ export function Payments(_props?: any) {
             <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
             <XAxis dataKey="month" tick={{ fontSize: 11, fill: t.muted }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 11, fill: t.muted }} axisLine={false} tickLine={false}
-              tickFormatter={v => (v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v}`)} />
+              tickFormatter={v => (v >= 1000 ? `${symbol}${(v / 1000).toFixed(1)}k` : `${symbol}${v}`)} />
             <Tooltip content={<CustomTooltip />} />
             <Area type="monotone" dataKey="revenue" stroke="#5E8B7E" strokeWidth={2.5} fill="url(#revGrad)" name="Revenue" />
           </AreaChart>
@@ -189,7 +194,7 @@ export function Payments(_props?: any) {
                   <td className="px-5 py-3.5 text-xs font-mono" style={{ color: t.muted }}>{tx.id}</td>
                   <td className="px-5 py-3.5 text-sm font-medium" style={{ color: t.text }}>{tx.user}</td>
                   <td className="px-5 py-3.5 text-sm" style={{ color: t.textSec }}>{tx.counselor}</td>
-                  <td className="px-5 py-3.5 text-sm font-semibold" style={{ color: t.text }}>${tx.amount}</td>
+                  <td className="px-5 py-3.5 text-sm font-semibold" style={{ color: t.text }}>{money(tx.amount)}</td>
                   <td className="px-5 py-3.5 text-sm" style={{ color: t.textSec }}>{tx.date}</td>
                   <td className="px-5 py-3.5 text-sm" style={{ color: t.textSec }}>{tx.method}</td>
                   <td className="px-5 py-3.5">

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Search, Plus, ChevronLeft, ChevronRight, Video, Check, X, Calendar, Clock, MoreVertical, MessageSquare, Download, Sparkles } from 'lucide-react';
 import { useTheme } from '../ThemeContext';
 import { api } from '../../../lib/api';
+import { useMoney } from '../../../lib/money';
 
 type AppointmentStatus = 'confirmed' | 'pending' | 'rejected' | 'completed' | 'cancelled';
 
@@ -315,6 +316,8 @@ interface AppointmentsPageProps {
 }
 
 export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
+  // Currency follows the server (the gateway charges in ₹), never a literal '$'.
+  const { money, symbol } = useMoney();
   const { c, sh } = useTheme();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -358,7 +361,7 @@ export function AppointmentsPage({ onNavigate }: AppointmentsPageProps) {
           issue: a.patient?.reason || 'General wellbeing',
           status: (a.status === 'confirmed' && new Date(a.dateTime) >= new Date() ? 'confirmed' : a.status) as AppointmentStatus,
           duration: '50 min',
-          notes: `Booked ${new Date(a.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · $${a.price}`,
+          notes: `Booked ${new Date(a.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${money(a.price)}`,
           dateTime: a.dateTime,
           reason: a.reason || '',
           mode: a.mode || 'online',

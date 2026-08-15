@@ -6,6 +6,7 @@ import {
   MessageCircle, TrendingUp, CheckCircle, ChevronRight, Play, ShieldCheck
 } from 'lucide-react';
 import { CC } from '../../lib/colors';
+import { fileUrl } from '../../lib/api';
 
 const fadeUp = {
   initial: { opacity: 0, y: 40 },
@@ -452,7 +453,7 @@ export function LandingPage() {
                 style={{ backgroundColor: CC.lightIvory, boxShadow: '0 8px 32px rgba(53,92,77,0.08)' }}
               >
                 <div className="relative h-56 overflow-hidden">
-                  <img src={c.image} alt={c.name} className="w-full h-full object-cover" />
+                  <img src={fileUrl(c.image)} alt={c.name} className="w-full h-full object-cover" />
                   <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, transparent 50%, rgba(35,49,45,0.6))' }} />
                   <span
                     className="absolute top-4 right-4 px-3 py-1 rounded-full text-xs text-white"

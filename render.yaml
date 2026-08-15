@@ -1,0 +1,64 @@
+# Render blueprint for the CounselConnect API.
+#
+# Point Render at this repository and it reads this file instead of asking you
+# to fill in a form. The secrets are deliberately NOT in here — `sync: false`
+# means Render prompts you for each one and stores it encrypted, so nothing
+# sensitive is ever committed.
+
+services:
+  - type: web
+    name: counselconnect-api
+    runtime: node
+    plan: free
+    region: singapore          # closest free region to India — lower latency
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+
+    # Render restarts the instance if this stops returning 200.
+    healthCheckPath: /api/health
+
+    # The store loads every collection into memory at boot and serves reads from
+    # that cache. That is correct for exactly one instance; a second one would
+    # have its own cache and the two would silently disagree. Do not scale this
+    # up without converting the services to async/await against the driver.
+    numInstances: 1
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Render sets PORT itself; server.js already reads it.
+
+      # Generated once by Render and kept — no need to invent one yourself.
+      - key: JWT_SECRET
+        generateValue: true
+
+      - key: JWT_EXPIRES_IN
+        value: 7d
+
+      # Your MongoDB Atlas connection string. Prompted on first deploy.
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: counselconnect
+
+      # Atlas is a network hop away, so allow longer than the local default.
+      - key: MONGODB_TIMEOUT_MS
+        value: "15000"
+
+      # Refuse to start rather than quietly writing to a disk that gets wiped.
+      - key: MONGODB_REQUIRED
+        value: "true"
+
+      # Your Vercel site. Set this after the frontend is deployed, otherwise
+      # every browser request is refused by CORS.
+      - key: FRONTEND_URL
+        sync: false
+
+      # Razorpay test keys. Leave both blank and the app falls back to the
+      # simulated payment form, which still works end to end.
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false

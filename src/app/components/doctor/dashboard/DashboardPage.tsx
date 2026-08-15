@@ -9,6 +9,7 @@ import {
 import { useState, useEffect } from 'react';
 import { useTheme } from '../ThemeContext';
 import { api } from '../../../lib/api';
+import { useMoney } from '../../../lib/money';
 
 function StatCard({ icon, label, value, change, changeLabel, color, onNavigate: _nav }: {
   icon: React.ReactNode; label: string; value: string; change: number;
@@ -52,6 +53,8 @@ interface DashboardPageProps {
 }
 
 export function DashboardPage({ onNavigate }: DashboardPageProps) {
+  // Currency follows the server (the gateway charges in ₹), never a literal '$'.
+  const { money, symbol } = useMoney();
   const { c, sh } = useTheme();
   const [stats, setStats] = useState<any>(null);
   const [moodByPatient, setMoodByPatient] = useState<Record<string, string>>({});
@@ -313,14 +316,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
               <h3 style={{ fontSize: 15, fontWeight: 700, color: c.textPrimary, margin: 0 }}>Revenue Overview</h3>
               <p style={{ fontSize: 12, color: c.textMuted, margin: 0, marginTop: 2 }}>Monthly earnings from sessions</p>
             </div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#7C6FFF' }}>{'$' + (totals.monthlyRevenue ?? 0).toLocaleString()}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#7C6FFF' }}>{money(totals.monthlyRevenue ?? 0)}</div>
           </div>
           <ResponsiveContainer width="100%" height={170}>
             <LineChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" stroke={c.border} vertical={false} />
               <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 12, fill: c.textMuted }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 12, fill: c.textMuted }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-              <Tooltip contentStyle={{ borderRadius: 12, border: `1px solid ${c.border}`, fontFamily: 'Inter', fontSize: 12, background: c.white, color: c.textPrimary }} formatter={(v: number) => [`$${v.toLocaleString()}`, 'Revenue']} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontFamily: 'Inter', fontSize: 12, fill: c.textMuted }} tickFormatter={v => `${symbol}${(v/1000).toFixed(0)}k`} />
+              <Tooltip contentStyle={{ borderRadius: 12, border: `1px solid ${c.border}`, fontFamily: 'Inter', fontSize: 12, background: c.white, color: c.textPrimary }} formatter={(v: number) => [money(v), 'Revenue']} />
               <Line type="monotone" dataKey="revenue" stroke="#7C6FFF" strokeWidth={2.5} dot={{ fill: '#7C6FFF', r: 4 }} />
             </LineChart>
           </ResponsiveContainer>

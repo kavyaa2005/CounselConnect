@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 import { adminApi, useAdminData, exportCsv } from "../lib/adminApi";
+import { fileUrl } from '../../lib/api';
 
 const statusConfig: Record<string, { bg: string; color: string; dot: string }> = {
   Active: { bg: "#EAF7EA", color: "#4CAF50", dot: "#4CAF50" },
@@ -449,7 +450,7 @@ export function Users({ pageAction, onActionConsumed }: { pageAction?: string | 
                   <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-white text-2xl font-bold border-4 shadow-lg overflow-hidden"
                     style={{ background: selectedUser.color, borderColor: t.card }}>
                     {selectedUser.avatarUrl
-                      ? <img src={selectedUser.avatarUrl} alt="" className="w-full h-full object-cover" />
+                      ? <img src={fileUrl(selectedUser.avatarUrl)} alt="" className="w-full h-full object-cover" />
                       : selectedUser.avatar}
                   </div>
                 </div>

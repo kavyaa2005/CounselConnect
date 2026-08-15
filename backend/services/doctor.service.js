@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { readStore, writeStore, readStoreObj, writeStoreObj } = require('../utils/fileStore.utils');
+const { money, moneyShort, symbol } = require('../utils/money.utils');
 
 // ── Helpers ─────────────────────────────────────────────────────
 const getDoctor = (doctorId) => {
@@ -1526,7 +1527,7 @@ const askAssistant = (doctorId, question, patientId) => {
     const t = analytics.totals || {};
     const paid = appointments.filter(a => a.status !== 'cancelled');
     return {
-      answer: `This month you have earned $${(t.monthlyRevenue ?? 0).toLocaleString()}. ` +
+      answer: `This month you have earned ${moneyShort(t.monthlyRevenue ?? 0)}. ` +
         `${paid.length} billable session${paid.length === 1 ? '' : 's'} on record across ${patients.length} patient${patients.length === 1 ? '' : 's'}.`,
       intent: 'revenue',
     };

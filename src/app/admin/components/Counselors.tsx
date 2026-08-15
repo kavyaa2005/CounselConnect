@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 import { adminApi, useAdminData, exportCsv } from "../lib/adminApi";
+import { fileUrl } from '../../lib/api';
 
 const statusConfig: Record<string, { bg: string; color: string; dot: string }> = {
   Verified: { bg: "#EAF7EA", color: "#4CAF50", dot: "#4CAF50" },
@@ -455,7 +456,7 @@ export function Counselors({ pageAction, onActionConsumed, onNavigate }: { pageA
                   <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-white text-xl font-bold border-4 shadow-lg overflow-hidden"
                     style={{ background: selected.color, borderColor: t.card }}>
                     {selected.avatarUrl
-                      ? <img src={selected.avatarUrl} alt="" className="w-full h-full object-cover" />
+                      ? <img src={fileUrl(selected.avatarUrl)} alt="" className="w-full h-full object-cover" />
                       : selected.avatar}
                   </div>
                 </div>

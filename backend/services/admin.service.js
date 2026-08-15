@@ -4,6 +4,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { hashPassword } = require('../utils/password.utils');
 const { readStore, writeStore, readStoreObj, writeStoreObj } = require('../utils/fileStore.utils');
+const { money, moneyShort, symbol } = require('../utils/money.utils');
 
 /* ───────────────────────── helpers ───────────────────────── */
 
@@ -231,7 +232,7 @@ const toAdminCounselor = (d) => {
     color: colorFor(d.id),
     availability: d.availability || 'Mon–Fri',
     location: d.location || '—',
-    revenue: `$${s.revenue.toLocaleString()}`,
+    revenue: moneyShort(s.revenue),
     revenueValue: s.revenue,
     reviews: s.reviews,
     bio: d.bio || '',
@@ -782,7 +783,7 @@ const getDashboard = () => {
     { key: 'today', label: "Today's Sessions", value: todaysAppts.length.toLocaleString(), change: pctChange(appts.length, apptsPrev), up: true },
     { key: 'completed', label: 'Completed', value: completed.length.toLocaleString(), change: pctChange(completed.length, Math.max(apptsPrev - 1, 0)), up: true },
     { key: 'pending', label: 'Pending', value: pending.length.toLocaleString(), change: pending.length ? '+' + pending.length : '0', up: false },
-    { key: 'revenue', label: 'Revenue', value: `$${(payments.summary.totalRevenue / 1000).toFixed(1)}K`, change: '+' + payments.summary.count, up: true },
+    { key: 'revenue', label: 'Revenue', value: `${symbol()}${(payments.summary.totalRevenue / 1000).toFixed(1)}K`, change: '+' + payments.summary.count, up: true },
   ];
 
   // Real activity feed, newest first

@@ -3,6 +3,7 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 
 const corsConfig = require('./config/cors.config');
 const { notFound, globalErrorHandler } = require('./middleware/error.middleware');
@@ -28,14 +29,25 @@ const feedbackRoutes     = require('./routes/feedback.routes');
 
 const app = express();
 
+// Behind Render/Vercel/Nginx the real client address arrives in
+// X-Forwarded-For and the real scheme in X-Forwarded-Proto. Without this every
+// request looks like it came from the load balancer.
+app.set('trust proxy', 1);
+
 // Security & parsing
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors(corsConfig));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Static uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Static uploads.
+// The directory is created here as well as in the routes: on a fresh clone or a
+// fresh container it does not exist yet, and express.static on a missing path
+// fails quietly in a way that looks like a broken image rather than a setup
+// problem.
+const UPLOAD_ROOT = path.join(__dirname, 'uploads');
+fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
+app.use('/uploads', express.static(UPLOAD_ROOT));
 
 // Health check
 app.get('/api/health', (req, res) => {

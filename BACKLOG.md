@@ -128,3 +128,86 @@ See `DATABASE.md` for setup.
 | DB1 | **Single-process assumption** | Reads are served from an in-process cache loaded at boot; writes go straight to MongoDB. Correct for one backend instance. Running several would need the services converted to async/await against the driver. |
 | DB2 | ~~Not verified against a real mongod~~ **CLOSED** | Verified on the user's PC 5 Aug 2026: MongoDB 8.0 + Compass 1.49.12, all 21 collections created and all 198 documents imported with counts matching exactly. |
 | DB3 | **Silent fallback can split the data** | If MongoDB is not running at boot, the server starts on the JSON files and anything created that session is written there, not to MongoDB — and the importer only fills *empty* collections, so it is never merged back. `MONGODB_REQUIRED=true` in `backend/.env` turns this into a startup error instead. |
+
+---
+
+## PAYMENTS — Razorpay
+
+Real payment gateway, live in **test mode** (`rzp_test_…`). The old simulated
+form is kept as a fallback and still works when no keys are configured.
+
+### How it works
+
+**Pay first, book second.** The appointment is created only *after* the server
+has re-computed Razorpay's signature — so an abandoned or failed payment never
+leaves an unpaid booking holding a slot on the counselor's calendar.
+
+```
+Confirm Booking
+  → POST /billing/order    slot re-checked, fee read from the counselor record,
+                           Razorpay Order opened, booking parked as an "intent"
+  → Razorpay Checkout      card / UPI / netbanking / wallet
+  → POST /billing/verify   HMAC-SHA256 of `order_id|payment_id` re-computed with
+                           our secret; only on a match is the appointment created
+                           as confirmed + paid, with a payment record and receipt
+  → POST /billing/abandon   if the customer closes the sheet — nothing is booked
+```
+
+Three things the browser is deliberately not trusted with:
+
+| Risk | Guard |
+|---|---|
+| A modified client sets its own price | The fee is read from the counselor's record server-side. A `price` in the request body is ignored entirely. |
+| A forged "payment succeeded" POST | The signature is an HMAC keyed with the secret, compared with `timingSafeEqual`. Only Razorpay can produce it. |
+| The same payment replayed to get two bookings | The intent is marked `paid`; a replay returns the original booking instead of creating a second one. |
+
+### Currency
+
+The gateway charges in **₹**. Every screen now asks the server for the symbol
+(`GET /billing/config` → `backend/utils/money.utils.js`, `src/app/lib/money.ts`)
+instead of typing `'$'` literally, which it did in 24 places across 11 files —
+checkout would have said ₹80 while the dashboard, reports and PDFs said $80 for
+the same session.
+
+| # | Item | Notes |
+|---|---|---|
+| P1 | **Test mode only** | Real cards are not charged. Going live means swapping in `rzp_live_…` keys and completing Razorpay's KYC — no code change. |
+| P2 | **Refunds are recorded, not sent** | Cancelling marks the payment refunded in our own records; no refund is issued through Razorpay's API. Fine for the demo, needs `POST /payments/:id/refund` for real money. |
+| P3 | **No webhook** | Confirmation relies on the browser returning from Checkout. If the customer's connection drops after paying but before `/billing/verify` lands, the money is taken and the booking is not created — the intent stays `created` and needs manual reconciliation. Razorpay's `payment.captured` webhook is the proper fix. |
+| P4 | **Keys live in `backend/.env`** | Gitignored and untracked, so they are not in the repo — but they *are* inside the zip you send teammates. Test keys are safe to share within the team; never publish them. Without the keys the app falls back to the simulated form, so a teammate can still run everything. |
+
+---
+
+## DEPLOYMENT
+
+Prepared for a free-tier deploy: **Vercel** (React) + **Render** (Express API and
+Socket.IO signalling) + **MongoDB Atlas** (database). Step-by-step instructions
+are in `DEPLOYMENT.md`.
+
+### What changed to make it deployable
+
+| Change | Why it was needed |
+|---|---|
+| **CORS accepts the deployed origin** (`config/cors.config.js`) | Was a fixed array containing only localhost. A deployed frontend would have had every request refused, which looks identical to the API being down. Now checks `FRONTEND_URL` (comma-separated), local dev ports, and `*.vercel.app` previews. |
+| **Production refuses to boot without `JWT_SECRET`** | The fallback secret is committed to a public repository. Deployed with it, anyone who read the repo could forge an admin token. It now fails loudly at startup instead. |
+| **MongoDB is required in production by default** | Free hosts have no persistent disk. Without this the server would silently fall back to JSON files on a disk that is wiped on every restart — appearing to work while throwing away every new booking and payment. |
+| **`trust proxy` enabled** | Render terminates TLS at a load balancer; without this the app sees the balancer's address instead of the client's. |
+| **`fileUrl()` helper** (`src/app/lib/api.ts`) | Uploaded files are stored as paths relative to the API server. Two places pasted a hardcoded `http://localhost:5000` in front — the profile-photo **upload was hardcoded**, so it would have failed outright on the live site, and been blocked as mixed content on https. 17 further `<img>` tags rendered bare paths that resolve against the frontend origin, so any uploaded avatar was a broken image. |
+| **`vercel.json`** | SPA rewrites — without them, refreshing on any route other than `/` returns a 404, because the server looks for a file that doesn't exist. |
+| **`render.yaml`** | One-click blueprint; secrets marked `sync: false` so they are prompted for, never committed. |
+| **`backend/.env.example`** | Documents every setting for anyone cloning the repo. Note `.gitignore` had `.env.*`, which was silently excluding this file — a negation was added. |
+
+Verified: 13 production-guard assertions (JWT refusal, database-required
+behaviour, 10 CORS origin cases including a lookalike domain and an http
+downgrade), real CORS responses and a browser preflight against a live server,
+and a clean-room `npm install` + `vite build` from the committed manifest
+proving the bundle contains the remote API URL and **zero** references to
+localhost.
+
+| # | Item | Notes |
+|---|---|---|
+| DP1 | **Uploads do not survive a restart** | Free instances have no persistent disk, so profile photos, chat attachments and documents uploaded on the live site are lost on redeploy. Seeded avatars (Unsplash URLs) are unaffected. Real fix: Cloudinary or S3. |
+| DP2 | **Free backend sleeps after 15 min idle** | Wakes in up to a minute, during which the site looks broken. `DEPLOYMENT.md` Part 7 sets up a 10-minute pinger. Do not skip before a review. |
+| DP3 | **Must stay at one instance** | Same single-process constraint as DB1 — the read cache is per-process. `render.yaml` pins `numInstances: 1`. |
+| DP4 | **No TURN server** | Calls are peer-to-peer with STUN only. Two users behind restrictive NATs (some campus wifi) may fail to connect. |
+| DP5 | **`react` is only an optional peerDependency** | A clean `npm install` does currently pull it in transitively, and the build was verified end to end — but it is not a declared dependency, so a future dependency change could break the build with a confusing "cannot resolve react". Moving react/react-dom into `dependencies` would remove the risk. |

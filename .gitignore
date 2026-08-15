@@ -7,6 +7,10 @@ coverage/
 .vite/
 .env
 .env.*
+# …but the template must be shared: it lists which settings exist and holds no
+# secrets. Without this exception `.env.*` above would silently exclude it.
+!.env.example
+!**/.env.example
 *.log
 pnpm-debug.log*
 npm-debug.log*

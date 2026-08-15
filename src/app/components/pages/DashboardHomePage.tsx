@@ -5,7 +5,7 @@ import { Calendar, TrendingUp, Sparkles, Clock, ArrowRight, Heart, Brain } from 
 import { LineChart, Line, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
 import { CC } from '../../lib/colors';
 import { useAuth } from '../../context/AuthContext';
-import { api } from '../../lib/api';
+import { api, fileUrl } from '../../lib/api';
 
 const FALLBACK_CHART = [
   { day: 'Mon', value: null }, { day: 'Tue', value: null }, { day: 'Wed', value: null },
@@ -447,7 +447,7 @@ export function DashboardHomePage() {
                   style={{ border: `1px solid ${CC.softSage}` }}
                   whileHover={{ backgroundColor: `${CC.forestSage}05` }}
                 >
-                  <img src={c.avatar} alt={c.name} className="w-10 h-10 rounded-xl object-cover" />
+                  <img src={fileUrl(c.avatar)} alt={c.name} className="w-10 h-10 rounded-xl object-cover" />
                   <div className="flex-1 min-w-0">
                     <p style={{ fontWeight: 600, color: CC.primaryText, fontSize: '0.85rem' }}>{c.name}</p>
                     <p style={{ fontSize: '0.72rem', color: CC.mutedOlive }}>{c.specialty}</p>

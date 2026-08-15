@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { User, Bell, Lock, Globe, Palette, Shield, LogOut, ChevronRight, Camera } from 'lucide-react';
 import { CC } from '../../lib/colors';
 import { useAuth } from '../../context/AuthContext';
-import { api } from '../../lib/api';
+import { api, fileUrl } from '../../lib/api';
 import { useNavigate, useLocation } from 'react-router';
 
 const sections = [
@@ -157,7 +157,7 @@ export function SettingsPage() {
                 <div className="flex items-center gap-5 mb-8">
                   <div className="relative">
                     <img
-                      src={user?.avatar ? (user.avatar.startsWith('http') ? user.avatar : `http://localhost:5000${user.avatar}`) : "https://images.unsplash.com/photo-1768828246616-e86833c66dea?w=100&h=100&fit=crop&crop=face"}
+                      src={fileUrl(user?.avatar) || "https://images.unsplash.com/photo-1768828246616-e86833c66dea?w=100&h=100&fit=crop&crop=face"}
                       alt="Profile"
                       className="w-20 h-20 rounded-2xl object-cover"
                     />
@@ -185,14 +185,11 @@ export function SettingsPage() {
                         const formData = new FormData();
                         formData.append('photo', file);
                         try {
-                          const token = localStorage.getItem('cc_token');
-                          const res = await fetch('http://localhost:5000/api/user/profile/photo', {
-                            method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {},
-                            body: formData,
-                          });
-                          const json = await res.json();
-                          if (json.success) updateUserLocal({ avatar: json.data.avatarUrl });
-                        } catch { alert('Photo upload failed'); }
+                          // Goes through the shared client so it reaches the
+                          // configured API host, not a hardcoded localhost.
+                          const res = await api.upload('/user/profile/photo', formData);
+                          updateUserLocal({ avatar: res.data.avatarUrl });
+                        } catch (err: any) { alert(err?.message || 'Photo upload failed'); }
                       }}
                     />
                     <button

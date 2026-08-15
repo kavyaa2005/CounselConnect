@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Search, Paperclip, Smile, Pin, Mic, Square } from 'lucide-react';
 import { CC } from '../../lib/colors';
-import { api } from '../../lib/api';
+import { api, fileUrl } from '../../lib/api';
 import { ChatChannel, VoiceRecorder } from '../../lib/chatClient';
 import { getSocket } from '../../lib/callClient';
 
@@ -319,7 +319,7 @@ export function ChatPage() {
               >
                 <div className="relative flex-shrink-0">
                   {con.avatar ? (
-                    <img src={con.avatar} alt={con.name} className="w-12 h-12 rounded-xl object-cover" />
+                    <img src={fileUrl(con.avatar)} alt={con.name} className="w-12 h-12 rounded-xl object-cover" />
                   ) : (
                     <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: CC.forestSage }}>
                       <span style={{ fontWeight: 700 }}>{con.name[0]}</span>
@@ -355,7 +355,7 @@ export function ChatPage() {
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ backgroundColor: CC.lightIvory, borderColor: CC.softSage }}>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <img src={activeCon.avatar} alt={activeCon.name} className="w-10 h-10 rounded-xl object-cover" />
+              <img src={fileUrl(activeCon.avatar)} alt={activeCon.name} className="w-10 h-10 rounded-xl object-cover" />
               {isOnline(activeCon.id) && (
                 <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white" style={{ backgroundColor: '#22c55e' }} />
               )}
@@ -387,7 +387,7 @@ export function ChatPage() {
               className={`flex gap-3 ${msg.isMe ? 'flex-row-reverse' : ''}`}
             >
               {!msg.isMe && (
-                <img src={(msg as any).avatar} alt={msg.sender} className="w-9 h-9 rounded-xl object-cover flex-shrink-0" />
+                <img src={fileUrl((msg as any).avatar)} alt={msg.sender} className="w-9 h-9 rounded-xl object-cover flex-shrink-0" />
               )}
               <div className={`max-w-[65%] ${msg.isMe ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
                 <div
@@ -440,7 +440,7 @@ export function ChatPage() {
                 exit={{ opacity: 0 }}
                 className="flex gap-3 items-end"
               >
-                <img src={activeCon.avatar} alt="avatar" className="w-9 h-9 rounded-xl object-cover" />
+                <img src={fileUrl(activeCon.avatar)} alt="avatar" className="w-9 h-9 rounded-xl object-cover" />
                 <div className="px-4 py-3 rounded-2xl flex gap-1.5 items-center" style={{ backgroundColor: CC.lightIvory, borderRadius: '20px 20px 20px 4px' }}>
                   {[0, 1, 2].map(i => (
                     <motion.div

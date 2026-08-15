@@ -3,7 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Clock, Video, MessageCircle, CheckCircle, Calendar, CreditCard, Paperclip, X, Download } from 'lucide-react';
 import { CC } from '../../lib/colors';
-import { api } from '../../lib/api';
+import { api, fileUrl } from '../../lib/api';
+import { getUser } from '../../lib/auth';
+import { useMoney } from '../../lib/money';
+import { loadRazorpay, openCheckout } from '../../lib/razorpay';
 
 const SESSION_TYPES = [
   { id: 'video', icon: Video,          label: 'Video Session', desc: '50-min video call' },
@@ -80,6 +83,17 @@ export function AppointmentsPage() {
   // Real availability for the selected counselor, keyed by YYYY-MM-DD
   const [availability, setAvailability] = useState<Record<string, any[]>>({});
   const [loadingSlots, setLoadingSlots] = useState(false);
+  // Whether this server has a real payment gateway configured.
+  const [gateway, setGateway] = useState<{ enabled: boolean; testMode?: boolean }>({ enabled: false });
+  const [paid, setPaid] = useState(false);
+  // The currency symbol comes from the server, never a literal '$'.
+  const { money } = useMoney();
+
+  useEffect(() => {
+    api.get('/billing/config')
+      .then(r => setGateway({ enabled: !!r.data.enabled, testMode: !!r.data.testMode }))
+      .catch(() => {});   // no gateway → the simulated flow below still works
+  }, []);
 
   // Pull the counselor's real open slots instead of showing a fixed grid.
   useEffect(() => {
@@ -189,36 +203,90 @@ export function AppointmentsPage() {
   const prevMo = () => { if (mo===0){setYr(y=>y-1);setMo(11);}else setMo(m=>m-1); setDay(null);setSlot(null); };
   const nextMo = () => { if (mo===11){setYr(y=>y+1);setMo(0);}else setMo(m=>m+1); setDay(null);setSlot(null); };
 
+  /** Uploads the chosen attachments against a booking that already exists. */
+  const uploadPending = async (appointmentId: string) => {
+    for (const f of pending) {
+      const fd = new FormData();
+      fd.append('file', f);
+      try { await api.upload(`/appointments/${appointmentId}/documents`, fd); } catch { /* non-fatal */ }
+    }
+  };
+
+  const bookingPayload = () => ({
+    counselorId: counselor.id,
+    counselorName: counselor.name,
+    counselorAvatar: counselor.avatar,
+    sessionType,
+    mode,
+    reason: reason.trim(),
+    date: `${MONTHS[mo]} ${day}, ${yr}`,
+    time: slot,
+  });
+
   const book = async () => {
     setLoading(true);
     setBookError('');
     try {
-      const res = await api.post('/appointments', {
-        counselorId: counselor.id,
-        counselorName: counselor.name,
-        counselorAvatar: counselor.avatar,
-        sessionType,
-        mode,
-        reason: reason.trim(),
-        date: `${MONTHS[mo]} ${day}, ${yr}`,
-        time: slot,
-        price: counselor.price,
-      });
-
-      // Attachments are uploaded after the booking exists, since they hang
-      // off its id. A failed upload must not lose the booking itself.
-      const id = res.data.appointment.id;
-      for (const f of pending) {
-        const fd = new FormData();
-        fd.append('file', f);
-        try { await api.upload(`/appointments/${id}/documents`, fd); } catch { /* reported below */ }
+      if (gateway.enabled) {
+        await bookWithPayment();
+      } else {
+        // No gateway configured on this server — book first, pay from Billing.
+        const res = await api.post('/appointments', { ...bookingPayload(), price: counselor.price });
+        await uploadPending(res.data.appointment.id);
+        setPaid(false);
+        setConfirmed(true);
       }
-      setConfirmed(true);
     } catch (err: any) {
       setBookError(err.message || 'Booking failed. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * Pay first, book second.
+   *
+   * The appointment is created by the server only after it has re-computed
+   * Razorpay's signature, so an abandoned or failed payment never leaves an
+   * unpaid booking sitting on the counselor's calendar.
+   */
+  const bookWithPayment = async () => {
+    // 1. Server checks the slot is genuinely free and opens an order priced
+    //    from the counselor's own record.
+    const orderRes = await api.post('/billing/order', bookingPayload());
+    const order = orderRes.data;
+
+    // 2. Payment sheet.
+    const ready = await loadRazorpay();
+    if (!ready) {
+      await api.post('/billing/abandon', { orderId: order.orderId, reason: 'checkout script failed to load' })
+        .catch(() => {});
+      throw new Error('Could not open the payment window. Check your internet connection and try again.');
+    }
+
+    let result;
+    try {
+      const me = getUser();
+      result = await openCheckout(order, { name: me?.name, email: me?.email, contact: me?.phone });
+    } catch (payErr: any) {
+      await api.post('/billing/abandon', { orderId: order.orderId, reason: payErr?.message || 'payment failed' })
+        .catch(() => {});
+      throw payErr;
+    }
+
+    if (!result) {
+      // Sheet dismissed. Nothing was charged and nothing was booked — say so
+      // plainly rather than showing a scary failure.
+      await api.post('/billing/abandon', { orderId: order.orderId, reason: 'closed by user' }).catch(() => {});
+      throw new Error('Payment cancelled — your slot has not been booked. You can try again any time.');
+    }
+
+    // 3. Only the server can turn a payment into a booking.
+    const verified = await api.post('/billing/verify', result);
+    const appt = verified.data.appointment;
+    if (appt?.id) await uploadPending(appt.id);
+    setPaid(true);
+    setConfirmed(true);
   };
 
   if (confirmed) {
@@ -238,7 +306,7 @@ export function AppointmentsPage() {
           </p>
           <div className="p-5 rounded-2xl mb-6" style={{backgroundColor:CC.softSage}}>
             <div className="flex items-center gap-4">
-              <img src={counselor.avatar} alt="" className="w-14 h-14 rounded-2xl object-cover" />
+              <img src={fileUrl(counselor.avatar)} alt="" className="w-14 h-14 rounded-2xl object-cover" />
               <div className="text-left">
                 <p style={{fontWeight:700,color:CC.primaryText}}>{counselor.name}</p>
                 <p style={{fontSize:'0.82rem',color:CC.mutedOlive}}>{counselor.specialty}</p>
@@ -246,20 +314,31 @@ export function AppointmentsPage() {
               </div>
             </div>
           </div>
-          {/* Payment is the natural next step right after booking */}
-          <div className="p-4 rounded-2xl mb-5 flex items-center gap-3"
-            style={{backgroundColor:'rgba(217,119,87,0.08)',border:`1px solid ${CC.terracotta}33`}}>
-            <Clock size={16} color={CC.terracotta} style={{flexShrink:0}} />
-            <p style={{fontSize:'0.83rem',color:CC.primaryText,textAlign:'left',lineHeight:1.5}}>
-              <strong>${counselor.price} due.</strong> Complete payment so your counselor can confirm the slot.
-            </p>
-          </div>
+          {/* Paid up front → nothing owed. Otherwise payment is the next step. */}
+          {paid ? (
+            <div className="p-4 rounded-2xl mb-5 flex items-center gap-3"
+              style={{backgroundColor:`${CC.forestSage}12`,border:`1px solid ${CC.forestSage}33`}}>
+              <CheckCircle size={16} color={CC.forestSage} style={{flexShrink:0}} />
+              <p style={{fontSize:'0.83rem',color:CC.primaryText,textAlign:'left',lineHeight:1.5}}>
+                <strong>{money(counselor.price)} paid.</strong> Your slot is confirmed — your counselor has been notified.
+                {gateway.testMode && <span style={{color:CC.mutedOlive}}> (test mode)</span>}
+              </p>
+            </div>
+          ) : (
+            <div className="p-4 rounded-2xl mb-5 flex items-center gap-3"
+              style={{backgroundColor:'rgba(217,119,87,0.08)',border:`1px solid ${CC.terracotta}33`}}>
+              <Clock size={16} color={CC.terracotta} style={{flexShrink:0}} />
+              <p style={{fontSize:'0.83rem',color:CC.primaryText,textAlign:'left',lineHeight:1.5}}>
+                <strong>{money(counselor.price)} due.</strong> Complete payment so your counselor can confirm the slot.
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-3 mb-3">
             <motion.button onClick={()=>navigate('/dashboard/billing')} whileHover={{scale:1.02}}
               className="flex-1 py-3 rounded-xl text-sm text-white flex items-center justify-center gap-2"
               style={{background:`linear-gradient(135deg,${CC.forestSage},${CC.darkForest})`,border:'none',cursor:'pointer',fontWeight:600}}>
-              <CreditCard size={15} /> Pay ${counselor.price}
+              <CreditCard size={15} /> {paid ? 'View Receipt' : `Pay ${money(counselor.price)}`}
             </motion.button>
             <motion.button onClick={()=>navigate('/dashboard/video')} whileHover={{scale:1.02}}
               className="flex-1 py-3 rounded-xl text-sm flex items-center justify-center gap-2"
@@ -268,7 +347,7 @@ export function AppointmentsPage() {
             </motion.button>
           </div>
 
-          <motion.button onClick={()=>{setConfirmed(false);setDay(null);setSlot(null);}} whileHover={{scale:1.02}}
+          <motion.button onClick={()=>{setConfirmed(false);setPaid(false);setPending([]);setDay(null);setSlot(null);}} whileHover={{scale:1.02}}
             className="w-full py-3 rounded-xl text-sm"
             style={{backgroundColor:'transparent',color:CC.mutedOlive,fontWeight:600,border:'none',cursor:'pointer'}}>
             Book Another
@@ -420,12 +499,12 @@ export function AppointmentsPage() {
                   <motion.button key={c.id} onClick={()=>setCounselor(c)} whileHover={{scale:1.01}}
                     className="w-full flex items-center gap-3 p-3 rounded-2xl text-left"
                     style={{backgroundColor:counselor.id===c.id?`${CC.forestSage}10`:'transparent',border:`1.5px solid ${counselor.id===c.id?CC.forestSage:CC.softSage}`,cursor:'pointer'}}>
-                    <img src={c.avatar} alt={c.name} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
+                    <img src={fileUrl(c.avatar)} alt={c.name} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p style={{fontWeight:600,color:CC.primaryText,fontSize:'0.85rem'}}>{c.name}</p>
                       <p style={{fontSize:'0.72rem',color:CC.mutedOlive}}>{c.specialty}</p>
                     </div>
-                    <span style={{fontSize:'0.78rem',fontWeight:700,color:CC.forestSage,flexShrink:0}}>${c.price}</span>
+                    <span style={{fontSize:'0.78rem',fontWeight:700,color:CC.forestSage,flexShrink:0}}>{money(c.price)}</span>
                     {counselor.id===c.id&&<CheckCircle size={14} color={CC.forestSage}/>}
                   </motion.button>
                 ))}
@@ -639,7 +718,7 @@ export function AppointmentsPage() {
                     {label:'Date',value:`${MONTHS[mo]} ${day}, ${yr}`},
                     {label:'Time',value:slot},
                     {label:'Type',value:mode==='offline'?'In person':sessionType==='video'?'Video Session':'Chat Session'},
-                    {label:'Cost',value:`$${counselor.price}`},
+                    {label:gateway.enabled?'Pay now':'Cost',value:money(counselor.price)},
                   ].map(item=>(
                     <div key={item.label} className="flex justify-between mb-2">
                       <span style={{color:'rgba(255,255,255,0.5)',fontSize:'0.76rem'}}>{item.label}</span>
@@ -654,7 +733,9 @@ export function AppointmentsPage() {
                       {loading
                         ?<motion.div animate={{rotate:360}} transition={{duration:1,repeat:Infinity,ease:'linear'}}
                             style={{width:18,height:18,borderRadius:'50%',border:'2px solid white',borderTopColor:'transparent'}}/>
-                        :<><CheckCircle size={16}/> Confirm Booking</>
+                        : gateway.enabled
+                          ?<><CreditCard size={16}/> Pay {money(counselor.price)} &amp; Book</>
+                          :<><CheckCircle size={16}/> Confirm Booking</>
                       }
                     </motion.button>
                   </div>
