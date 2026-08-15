@@ -23,6 +23,7 @@
 
 const { MongoClient } = require('mongodb');
 const dbConfig = require('../config/db.config');
+const { redactUri } = require('./mongoUri.utils');
 
 /** filename → collection name. `users.json` becomes the `users` collection. */
 const collectionName = (filename) => String(filename).replace(/\.json$/i, '');
@@ -241,7 +242,9 @@ async function close() {
 /** Snapshot for the boot banner and the health endpoint. */
 const stats = () => ({
   connected,
-  uri: dbConfig.uri,
+  // Redacted, never raw: this is surfaced by the public /api/health endpoint,
+  // and with Atlas the raw string contains the database password.
+  uri: redactUri(dbConfig.uri),
   dbName: dbConfig.dbName,
   collections: [...cache.entries()].map(([name, e]) => ({ name, count: e.docs.length })),
   pendingWrites,

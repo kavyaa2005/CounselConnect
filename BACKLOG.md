@@ -211,3 +211,15 @@ localhost.
 | DP3 | **Must stay at one instance** | Same single-process constraint as DB1 — the read cache is per-process. `render.yaml` pins `numInstances: 1`. |
 | DP4 | **No TURN server** | Calls are peer-to-peer with STUN only. Two users behind restrictive NATs (some campus wifi) may fail to connect. |
 | DP5 | **`react` is only an optional peerDependency** | A clean `npm install` does currently pull it in transitively, and the build was verified end to end — but it is not a declared dependency, so a future dependency change could break the build with a confusing "cannot resolve react". Moving react/react-dom into `dependencies` would remove the risk. |
+
+### Deployment fixes found while going live
+
+| Item | Notes |
+|---|---|
+| **`/api/health` leaked the database password** — FIXED | The endpoint is public and unauthenticated, and returned `uri: dbConfig.uri` verbatim. On localhost that string held no credentials, so nothing ever looked wrong; the moment it pointed at Atlas, anyone on the internet could read the full connection string including the password. Now redacted via `redactUri()`. |
+| **Boot warnings printed the raw connection string** — FIXED | `[store] MongoDB not reachable at ${dbConfig.uri}` wrote the password into the deploy logs. Same fix. |
+| **`utils/mongoUri.utils.js`** (new) | Shared connection-string analysis. Atlas answers every credential problem with the same "bad auth : authentication failed", so this names the actual cause: placeholder never replaced, angle brackets left in, unescaped `@`, reserved characters, quotes, stray whitespace, wrong hostname. Never returns the password, only its length — which is what identifies *which* password a host is using. |
+| **`npm run db:check`** (new) | Tests a connection string before deploying with it: validates the string, connects, and confirms write access. `npm run db:check -- "<string>"` or reads `MONGODB_URI` from `.env`. |
+| **Server startup now diagnoses connection failures** | On failure it prints the redacted string, username, host and password length, plus the specific cause and fix — so a failed deploy explains itself instead of repeating three unhelpful words. |
+| **Stale `pnpm-lock.yaml` removed** | Out of sync with `package.json`'s `pnpm.overrides`, which failed the Render build with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` and would have failed Vercel identically. npm and `package-lock.json` are now the single source of truth; both pnpm files are gitignored. |
+| **Node pinned to `22.x`** | `>=20.0.0` let Render install Node 26. Pinned to the version everything was tested on. |

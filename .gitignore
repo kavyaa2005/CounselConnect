@@ -21,3 +21,9 @@ yarn-error.log*
 backend/private/
 backend/private/
 backend/uploads/avatars/
+
+# This project standardises on npm (package-lock.json). A stray pnpm lockfile
+# makes Render and Vercel auto-detect pnpm, and a stale one fails the build with
+# ERR_PNPM_LOCKFILE_CONFIG_MISMATCH.
+pnpm-lock.yaml
+pnpm-workspace.yaml

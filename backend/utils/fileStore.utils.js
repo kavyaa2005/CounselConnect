@@ -106,13 +106,42 @@ async function initStore({ quiet = false } = {}) {
   const res = await mongo.connect(STORE_FILES);
 
   if (!res.ok) {
-    const msg =
-      `[store] MongoDB not reachable at ${dbConfig.uri} — ${res.reason}\n` +
-      `        Running on JSON files instead. Start MongoDB and restart to use the database.`;
+    // Never print dbConfig.uri directly — with Atlas it contains the password,
+    // and deploy logs are not a safe place for it.
+    const { analyzeUri, describeUri, redactUri } = require('./mongoUri.utils');
+
+    if (!quiet) {
+      console.error(`\n[store] Could not connect to MongoDB at ${redactUri(dbConfig.uri)}`);
+      console.error(`        ${res.reason}\n`);
+      console.error('        Connection string in use:');
+      console.error(describeUri(dbConfig.uri).split('\n').map(l => `          ${l}`).join('\n'));
+
+      // Atlas reports every credential problem with the same message, so spell
+      // out which specific cause applies.
+      const { problems } = analyzeUri(dbConfig.uri);
+      if (problems.length) {
+        console.error(`\n        ${problems.length} problem(s) found in the string itself:`);
+        problems.forEach((p, i) => {
+          console.error(`          ${i + 1}. ${p.what}`);
+          console.error(`             ${p.fix}`);
+        });
+      } else if (/bad auth|Authentication failed/i.test(String(res.reason))) {
+        console.error('\n        The string is well-formed, so the username or password is simply wrong.');
+        console.error('        Check that this username and password length match the user in');
+        console.error('        Atlas → Database Access. If you recently changed the password,');
+        console.error('        make sure it was updated everywhere, including on the host.');
+      } else {
+        console.error('\n        The string is well-formed, so this is a network problem.');
+        console.error('        Check Atlas → Network Access allows 0.0.0.0/0 and shows Active,');
+        console.error('        and that the cluster is not paused.');
+      }
+      console.error('\n        Run `npm run db:check` to test a string before deploying it.\n');
+    }
+
     if (dbConfig.required) {
       throw new Error(`MongoDB is required but unreachable: ${res.reason}`);
     }
-    if (!quiet) console.warn(msg);
+    console.warn('        Running on JSON files instead — data written now will NOT reach MongoDB.\n');
     return { ok: false, reason: res.reason, mode: 'files' };
   }
 
