@@ -116,6 +116,37 @@ async function initStore({ quiet = false } = {}) {
       console.error('        Connection string in use:');
       console.error(describeUri(dbConfig.uri).split('\n').map(l => `          ${l}`).join('\n'));
 
+      // Where did that value come from? On a host, "I definitely changed it"
+      // and "the running process sees the change" are different claims, and
+      // separating them is usually the whole diagnosis.
+      const envFile = path.join(__dirname, '../.env');
+      const fromFile = fs.existsSync(envFile);
+      console.error('\n        Where this value came from:');
+      if (process.env.MONGODB_URI) {
+        console.error(`          MONGODB_URI is set in the environment (${process.env.MONGODB_URI.length} characters)`);
+        console.error(fromFile
+          ? '          A .env file also exists, but the environment variable takes priority.'
+          : '          No .env file on this machine — the environment variable is the only source.');
+      } else {
+        console.error('          MONGODB_URI is NOT set in the environment.');
+        console.error(fromFile
+          ? `          Falling back to ${envFile}`
+          : '          Falling back to the built-in default (localhost).');
+      }
+
+      // A near-miss variable name (MONGO_URI, or a trailing space in the key)
+      // is invisible in a hosting panel until you see the list spelled out.
+      const KNOWN = ['MONGODB_URI', 'MONGODB_DB', 'MONGODB_TIMEOUT_MS', 'MONGODB_REQUIRED'];
+      const related = Object.keys(process.env).filter(k => /MONGO/i.test(k));
+      const unknown = related.filter(k => !KNOWN.includes(k));
+      if (related.length) {
+        console.error(`\n        Mongo variables set here: ${related.join(', ')}`);
+      }
+      if (unknown.length) {
+        console.error(`        Not recognised (typo?): ${unknown.join(', ')}`);
+        console.error(`        The app only reads: ${KNOWN.join(', ')}`);
+      }
+
       // Atlas reports every credential problem with the same message, so spell
       // out which specific cause applies.
       const { problems } = analyzeUri(dbConfig.uri);

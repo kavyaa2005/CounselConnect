@@ -49,6 +49,22 @@ const UPLOAD_ROOT = path.join(__dirname, 'uploads');
 fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
 app.use('/uploads', express.static(UPLOAD_ROOT));
 
+// The API root. Without this, opening the service URL in a browser returns a
+// bare 404 and fills the logs with "Route not found: /" — which looks like a
+// broken deployment when it is simply an API with no homepage.
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    service: 'CounselConnect API',
+    message: 'The API is running. The web app is served separately.',
+    health: '/api/health',
+    docs: 'https://github.com/Hyphenat/CounselConnect-',
+  });
+});
+
+// Browsers request this automatically; 204 keeps it out of the error log.
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 // Health check
 app.get('/api/health', (req, res) => {
   // Reports which backend is live and what's in it, so you can confirm the

@@ -3,6 +3,7 @@ const { port, nodeEnv } = require('./config/app.config');
 const dbConfig = require('./config/db.config');
 const { attachSignaling } = require('./realtime/signaling');
 const { initStore, closeStore, usingMongo, storeStats } = require('./utils/fileStore.utils');
+const { redactUri } = require('./utils/mongoUri.utils');
 
 let server = null;
 let io = null;
@@ -19,15 +20,27 @@ async function start() {
     console.log(`\n🌿 CounselConnect API`);
     console.log(`   Environment : ${nodeEnv}`);
     console.log(`   Port        : ${port}`);
-    console.log(`   Health      : http://localhost:${port}/api/health`);
-    console.log(`   Video calls : signaling live on ws://localhost:${port}`);
+    // On a host the public URL is not localhost, and printing localhost sends
+    // people to their own machine. Render supplies RENDER_EXTERNAL_URL.
+    const publicUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`;
+    console.log(`   Health      : ${publicUrl}/api/health`);
+    console.log(`   Video calls : signaling live on ${publicUrl.replace(/^http/, 'ws')}`);
 
     if (store.ok) {
       const s = storeStats();
       const total = s.collections.reduce((n, c) => n + c.count, 0);
-      console.log(`   Database    : MongoDB — ${dbConfig.dbName} at ${dbConfig.uri}`);
+      // Redacted: deploy logs are retained and readable by anyone with access
+      // to the dashboard, and with Atlas this string contains the database
+      // password. A local mongodb:// URI has no credentials, so it prints
+      // unchanged and stays useful for copying into Compass.
+      const safeUri = redactUri(dbConfig.uri);
+      console.log(`   Database    : MongoDB — ${dbConfig.dbName} at ${safeUri}`);
       console.log(`                 ${s.collections.length} collections, ${total} documents`);
-      console.log(`                 open Compass at ${dbConfig.uri} to browse them\n`);
+      console.log(`                 open Compass at ${safeUri} to browse them`);
+      if (safeUri !== dbConfig.uri) {
+        console.log('                 (password hidden — use the string from your own .env)');
+      }
+      console.log('');
     } else {
       console.log(`   Database    : JSON files (MongoDB unreachable)\n`);
     }
